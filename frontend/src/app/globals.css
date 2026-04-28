@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+@theme {
+  /* Mythra brand palette — cinematic dark with purple/blue/magenta gradients */
+  --color-mythra-bg: #06070d;
+  --color-mythra-surface: #0c0e1a;
+  --color-mythra-surface-elevated: #14172a;
+  --color-mythra-border: rgba(255, 255, 255, 0.06);
+  --color-mythra-border-glow: rgba(168, 85, 247, 0.35);
+
+  --color-mythra-text: #f3f1ff;
+  --color-mythra-text-muted: #9b9bb6;
+  --color-mythra-text-soft: rgba(243, 241, 255, 0.55);
+
+  --color-mythra-purple: #a855f7;
+  --color-mythra-purple-glow: rgba(168, 85, 247, 0.6);
+  --color-mythra-blue: #3b82f6;
+  --color-mythra-blue-glow: rgba(59, 130, 246, 0.55);
+  --color-mythra-magenta: #ec4899;
+  --color-mythra-magenta-glow: rgba(236, 72, 153, 0.5);
+  --color-mythra-cyan: #22d3ee;
+
+  --color-mythra-success: #22c55e;
+  --color-mythra-warn: #f59e0b;
+  --color-mythra-danger: #f43f5e;
+
+  /* Motion tokens */
+  --duration-instant: 80ms;
+  --duration-fast: 180ms;
+  --duration-medium: 320ms;
+  --duration-slow: 540ms;
+  --duration-cinematic: 900ms;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-cinematic: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --shadow-glow-purple: 0 0 60px -15px rgba(168, 85, 247, 0.7);
+  --shadow-glow-blue: 0 0 60px -15px rgba(59, 130, 246, 0.6);
+  --shadow-mythra-card: 0 24px 60px -20px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+
+  --radius-mythra-card: 14px;
+  --radius-mythra-pill: 999px;
+
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html, body {
+    background: var(--color-mythra-bg);
+    color: var(--color-mythra-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    background-image:
+      radial-gradient(at 20% -20%, rgba(168, 85, 247, 0.18) 0, transparent 55%),
+      radial-gradient(at 80% 0%, rgba(59, 130, 246, 0.14) 0, transparent 55%),
+      radial-gradient(at 40% 110%, rgba(236, 72, 153, 0.12) 0, transparent 55%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: rgba(168, 85, 247, 0.5);
+    color: #fff;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--color-mythra-purple);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(168, 85, 247, 0.18); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(168, 85, 247, 0.36); }
+
+  /* Hide horizontal scrollbar in carousels */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+@layer utilities {
+  .glass {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(18px) saturate(140%);
+  }
+
+  .gradient-text {
+    background: linear-gradient(120deg, #a855f7 0%, #3b82f6 50%, #ec4899 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .mythra-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.4), transparent);
+  }
+
+  .mythra-glow-purple { box-shadow: var(--shadow-glow-purple); }
+  .mythra-glow-blue { box-shadow: var(--shadow-glow-blue); }
+
+  .gpu { transform: translate3d(0, 0, 0); will-change: transform, opacity; }
+
+  @keyframes shimmer {
+    0% { background-position: -120% 0; }
+    100% { background-position: 220% 0; }
+  }
+  .shimmer {
+    background: linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.18), transparent);
+    background-size: 220% 100%;
+    animation: shimmer 1.8s infinite linear;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  .float-slow { animation: float 5s ease-in-out infinite; }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.5); }
+    50% { box-shadow: 0 0 30px 4px rgba(168, 85, 247, 0.35); }
+  }
+  .pulse-glow { animation: pulse-glow 2.4s ease-in-out infinite; }
+}

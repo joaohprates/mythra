@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Mythra.Domain</RootNamespace>
+    <AssemblyName>Mythra.Domain</AssemblyName>
+  </PropertyGroup>
+
+</Project>

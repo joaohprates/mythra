@@ -1,0 +1,91 @@
+# --- Mythra root .gitignore ---
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors
+.idea/
+.vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# Claude Code session data (private)
+.claude/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local media (sample assets only — never real libraries)
+media/library/
+media/cache/
+media/transcode/
+media/uploads/
+
+# --- .NET ---
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+*.user
+*.suo
+*.cache
+*.pdb
+*.userprefs
+artifacts/
+publish/
+TestResults/
+coverage*.json
+coverage*.xml
+coverage*.info
+*.coverage
+*.coveragexml
+.vs/
+*.lock.json
+*.swp
+
+# SQLite local files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+mythra.db*
+
+# --- Node ---
+node_modules/
+.pnpm-store/
+.yarn/
+.next/
+out/
+dist/
+build/
+.turbo/
+.cache/
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+
+# Coverage / test
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Vercel
+.vercel

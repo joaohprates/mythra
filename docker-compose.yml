@@ -1,0 +1,45 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    image: mythra/api:0.1.0
+    container_name: mythra-api
+    ports:
+      - "5080:5080"
+    environment:
+      ConnectionStrings__Default: "Data Source=/data/mythra.db;Cache=Shared;Foreign Keys=true;"
+      Jwt__Secret: "${MYTHRA_JWT_SECRET:-change-me-please-32-chars-min!!!!!!!}"
+      Metadata__TmdbApiKey: "${TMDB_API_KEY:-}"
+      Metadata__GoogleBooksApiKey: "${GOOGLE_BOOKS_API_KEY:-}"
+      Ffmpeg__TranscodeRoot: "/transcode"
+    volumes:
+      - mythra-data:/data
+      - ./media:/media:ro
+      - mythra-transcode:/transcode
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5080/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    image: mythra/web:0.1.0
+    container_name: mythra-web
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_ORIGIN: "http://api:5080"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mythra-data:
+  mythra-transcode:

@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Mythra.Api/Mythra.Api.csproj" />
+    <Project Path="src/Mythra.Application/Mythra.Application.csproj" />
+    <Project Path="src/Mythra.Domain/Mythra.Domain.csproj" />
+    <Project Path="src/Mythra.Infrastructure/Mythra.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Mythra.Api.Tests/Mythra.Api.Tests.csproj" />
+    <Project Path="tests/Mythra.Application.Tests/Mythra.Application.Tests.csproj" />
+    <Project Path="tests/Mythra.Domain.Tests/Mythra.Domain.Tests.csproj" />
+  </Folder>
+</Solution>
