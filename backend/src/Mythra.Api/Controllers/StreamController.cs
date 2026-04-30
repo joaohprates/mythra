@@ -4,6 +4,7 @@ using Mythra.Api.Common;
 using Mythra.Application.Abstractions.Auth;
 using Mythra.Application.Abstractions.Persistence;
 using Mythra.Application.Dtos.Streaming;
+using Mythra.Application.Services.ExternalProviders;
 using Mythra.Application.Services.Streaming;
 
 namespace Mythra.Api.Controllers;
@@ -13,6 +14,7 @@ namespace Mythra.Api.Controllers;
 public sealed class StreamController(
     IStreamingService streaming,
     IStreamSessionRepository sessions,
+    IExternalProviderService externalProviders,
     ICurrentUser currentUser) : ControllerBase
 {
     [HttpPost("start")]
@@ -59,4 +61,28 @@ public sealed class StreamController(
     [Authorize]
     public async Task<IActionResult> Probe(Guid videoItemId, CancellationToken ct) =>
         (await streaming.ProbeAsync(videoItemId, ct)).ToActionResult();
+
+    /// <summary>
+    /// Returns an external stream URL for a video media item (iframe embed, HLS or direct MP4).
+    /// Providers are tried in priority order; the first successful result is returned.
+    /// </summary>
+    [HttpGet("external/{mediaItemId:guid}")]
+    [Authorize]
+    public async Task<IActionResult> ExternalVideoStream(
+        Guid mediaItemId,
+        [FromQuery] int? season,
+        [FromQuery] int? episode,
+        CancellationToken ct) =>
+        (await externalProviders.GetVideoStreamAsync(mediaItemId, season, episode, ct)).ToActionResult();
+
+    /// <summary>
+    /// Returns aggregated external links (EPUB, MP3, web-reader, etc.) for a
+    /// book, audiobook or manga media item.
+    /// </summary>
+    [HttpGet("external/{mediaItemId:guid}/links")]
+    [Authorize]
+    public async Task<IActionResult> ExternalBookLinks(
+        Guid mediaItemId,
+        CancellationToken ct) =>
+        (await externalProviders.GetBookLinksAsync(mediaItemId, ct)).ToActionResult();
 }

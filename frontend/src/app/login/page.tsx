@@ -39,8 +39,11 @@ export default function LoginPage() {
       }
       router.replace("/");
     } catch (e) {
-      const msg = (e as { response?: { data?: { detail?: string } } }).response?.data?.detail
-        ?? "Something went wrong. Please try again.";
+      const data = (e as { response?: { data?: { detail?: string; errors?: Record<string, string[]> } } }).response?.data;
+      const msg =
+        data?.detail ??
+        (data?.errors ? Object.values(data.errors).flat().join(" ") : null) ??
+        "Something went wrong. Please try again.";
       setError(msg);
     } finally {
       setSubmitting(false);
@@ -129,6 +132,11 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
+              {mode === "register" && (
+                <p className="mt-1.5 text-[11px] text-mythra-text-soft">
+                  Min 8 characters · uppercase · lowercase · number
+                </p>
+              )}
             </div>
 
             {error && (

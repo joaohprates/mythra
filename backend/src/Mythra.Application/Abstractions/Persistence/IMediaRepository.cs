@@ -14,7 +14,8 @@ public sealed record MediaQuery(
     int? Year = null,
     int Skip = 0,
     int Take = 50,
-    string OrderBy = "title");
+    string OrderBy = "title",
+    IReadOnlyList<Guid>? Ids = null);
 
 public interface IMediaItemRepository : IRepository<MediaItem>
 {
@@ -23,6 +24,8 @@ public interface IMediaItemRepository : IRepository<MediaItem>
     Task<int> CountAsync(MediaQuery query, CancellationToken ct = default);
     Task<IReadOnlyList<MediaItem>> RecentlyAddedAsync(Guid? libraryId, int take, CancellationToken ct = default);
     Task<IReadOnlyList<MediaItem>> ByIdsAsync(IEnumerable<Guid> ids, CancellationToken ct = default);
+    /// <summary>Finds the first item that has a matching provider ID (e.g. "tmdb" → "155").</summary>
+    Task<MediaItem?> GetByProviderIdAsync(string providerKind, string providerId, CancellationToken ct = default);
 }
 
 public interface IVideoRepository : IRepository<VideoItem>

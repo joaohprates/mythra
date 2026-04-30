@@ -33,6 +33,19 @@ public sealed class MediaItemRepository(MythraDbContext db) : EfRepository<Media
     public async Task<IReadOnlyList<MediaItem>> ByIdsAsync(IEnumerable<Guid> ids, CancellationToken ct = default) =>
         await Set.AsNoTracking().Where(m => ids.Contains(m.Id)).ToListAsync(ct);
 
+    public Task<MediaItem?> GetByProviderIdAsync(string providerKind, string providerId, CancellationToken ct = default) =>
+        providerKind.ToLower() switch
+        {
+            "tmdb"      => Set.FirstOrDefaultAsync(m => m.ProviderTmdbId      == providerId, ct),
+            "imdb"      => Set.FirstOrDefaultAsync(m => m.ProviderImdbId      == providerId, ct),
+            "anilist"   => Set.FirstOrDefaultAsync(m => m.ProviderAnilistId   == providerId, ct),
+            "google"    => Set.FirstOrDefaultAsync(m => m.ProviderGoogleBooksId == providerId, ct),
+            "gutenberg" => Set.FirstOrDefaultAsync(m => m.ProviderGutenbergId == providerId, ct),
+            "librivox"  => Set.FirstOrDefaultAsync(m => m.ProviderLibriVoxId  == providerId, ct),
+            "mangadex"  => Set.FirstOrDefaultAsync(m => m.ProviderMangaDexId  == providerId, ct),
+            _           => Task.FromResult<MediaItem?>(null),
+        };
+
     private static IQueryable<MediaItem> ApplyQuery(IQueryable<MediaItem> q, MediaQuery query)
     {
         if (query.LibraryId.HasValue) q = q.Where(m => m.LibraryId == query.LibraryId);

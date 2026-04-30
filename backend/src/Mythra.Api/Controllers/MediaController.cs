@@ -22,9 +22,19 @@ public sealed class MediaController(IMediaService media) : ControllerBase
         [FromQuery] int skip = 0,
         [FromQuery] int take = 50,
         [FromQuery] string orderBy = "title",
+        [FromQuery] string? ids = null,
         CancellationToken ct = default)
     {
-        var query = new MediaQuery(libraryId, kind, search, genre, year, skip, take, orderBy);
+        IReadOnlyList<Guid>? parsedIds = null;
+        if (!string.IsNullOrWhiteSpace(ids))
+        {
+            parsedIds = ids.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                           .Select(s => Guid.TryParse(s.Trim(), out var g) ? g : (Guid?)null)
+                           .Where(g => g.HasValue)
+                           .Select(g => g!.Value)
+                           .ToList();
+        }
+        var query = new MediaQuery(libraryId, kind, search, genre, year, skip, take, orderBy, parsedIds);
         var result = await media.ListAsync(query, ct);
         return result.ToActionResult();
     }
@@ -38,6 +48,10 @@ public sealed class MediaController(IMediaService media) : ControllerBase
     [HttpGet("recently-added")]
     public async Task<IActionResult> RecentlyAdded([FromQuery] Guid? libraryId, [FromQuery] int take = 20, CancellationToken ct = default) =>
         (await media.RecentlyAddedAsync(libraryId, take, ct)).ToActionResult();
+
+    [HttpGet("{id:guid}/episodes")]
+    public async Task<IActionResult> Episodes(Guid id, CancellationToken ct) =>
+        (await media.ListEpisodesAsync(id, ct)).ToActionResult();
 
     [HttpGet("genres")]
     public async Task<IActionResult> Genres([FromQuery] MediaKind? kind, CancellationToken ct) =>

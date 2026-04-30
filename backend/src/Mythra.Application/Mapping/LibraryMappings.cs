@@ -11,10 +11,12 @@ public static class LibraryMappings
         l.Kind,
         l.Description,
         l.IsEnabled,
+        l.IsSystem,
         l.AutoRefreshMetadata,
         l.LastScannedAt,
         l.Folders.Count,
-        itemCount);
+        itemCount,
+        l.AllowedExtensions.AsReadOnly());
 
     public static LibraryDetailDto ToDetail(this Library l) => new(
         l.Id,
@@ -22,9 +24,12 @@ public static class LibraryMappings
         l.Kind,
         l.Description,
         l.IsEnabled,
+        l.IsSystem,
         l.AutoRefreshMetadata,
         l.LastScannedAt,
         l.PreferredLanguage,
         l.PreferredMetadataProvider,
+        l.AllowedExtensions.AsReadOnly(),
+        l.GetEffectiveExtensions(),
         l.Folders.Select(f => new LibraryFolderDto(f.Id, f.Path, f.IsActive, f.LastScannedAt)).ToList());
 }

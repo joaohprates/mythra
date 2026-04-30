@@ -1,33 +1,35 @@
 # Mythra backend (.NET 10)
+# ──────────────────────────────────────────
+# Stage 1: build
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-WORKDIR /src
+WORKDIR /app
 
-# Restore as a separate layer for caching
-COPY backend/Directory.Build.props backend/global.json ./
-COPY backend/src/Mythra.Domain/Mythra.Domain.csproj src/Mythra.Domain/
-COPY backend/src/Mythra.Application/Mythra.Application.csproj src/Mythra.Application/
-COPY backend/src/Mythra.Infrastructure/Mythra.Infrastructure.csproj src/Mythra.Infrastructure/
-COPY backend/src/Mythra.Api/Mythra.Api.csproj src/Mythra.Api/
-RUN dotnet restore src/Mythra.Api/Mythra.Api.csproj
+COPY backend/ ./
 
-# Build + publish
-COPY backend/src ./src
-RUN dotnet publish src/Mythra.Api/Mythra.Api.csproj -c Release -o /app /p:UseAppHost=false
+WORKDIR /app/src/Mythra.Api
 
+RUN dotnet restore Mythra.Api.csproj
+
+RUN dotnet publish Mythra.Api.csproj \
+      -c Release \
+      -o /out \
+      --no-restore \
+      /p:UseAppHost=false
+
+# ──────────────────────────────────────────
+# Stage 2: runtime
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Install ffmpeg for HLS / probing
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg \
+ && apt-get install -y --no-install-recommends ffmpeg curl \
  && rm -rf /var/lib/apt/lists/*
 
 ENV ASPNETCORE_URLS=http://+:5080 \
     ASPNETCORE_ENVIRONMENT=Production
 
-COPY --from=build /app ./
+COPY --from=build /out .
 
-VOLUME ["/data", "/media", "/transcode"]
 EXPOSE 5080
 
 ENTRYPOINT ["dotnet", "Mythra.Api.dll"]

@@ -12,7 +12,14 @@ public sealed class Library : AggregateRoot
     public string? PreferredMetadataProvider { get; set; }
     public bool AutoRefreshMetadata { get; set; } = true;
     public bool IsEnabled { get; set; } = true;
+    public bool IsSystem { get; set; } = false;
     public DateTimeOffset? LastScannedAt { get; set; }
+
+    /// <summary>
+    /// File extensions this library will index during scans.
+    /// Empty list = use the default extensions for <see cref="Kind"/>.
+    /// </summary>
+    public List<string> AllowedExtensions { get; set; } = [];
 
     public List<LibraryFolder> Folders { get; set; } = [];
 
@@ -47,4 +54,35 @@ public sealed class Library : AggregateRoot
         Name = newName.Trim();
         Touch();
     }
+
+    /// <summary>
+    /// Returns the effective extensions to scan.
+    /// If <see cref="AllowedExtensions"/> is non-empty, those are used.
+    /// Otherwise the defaults for the <see cref="Kind"/> are returned.
+    /// </summary>
+    public IReadOnlyList<string> GetEffectiveExtensions() =>
+        AllowedExtensions.Count > 0
+            ? AllowedExtensions.AsReadOnly()
+            : GetDefaultExtensions(Kind);
+
+    public static IReadOnlyList<string> GetDefaultExtensions(LibraryKind kind) => kind switch
+    {
+        LibraryKind.Video or LibraryKind.Anime =>
+            [".mp4", ".mkv", ".m4v", ".mov", ".avi", ".webm", ".ts", ".mpg", ".mpeg", ".wmv", ".m2ts"],
+        LibraryKind.Book =>
+            [".epub", ".pdf", ".mobi", ".azw3", ".fb2", ".txt"],
+        LibraryKind.Manga =>
+            [".cbz", ".cbr", ".cb7"],
+        LibraryKind.Audiobook or LibraryKind.Music =>
+            [".mp3", ".flac", ".m4a", ".ogg", ".wav", ".opus", ".aac", ".m4b"],
+        LibraryKind.Image =>
+            [".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".bmp", ".tiff"],
+        LibraryKind.General =>
+            [".mp4", ".mkv", ".m4v", ".mov", ".avi", ".webm", ".ts",
+             ".epub", ".pdf", ".mobi", ".azw3", ".fb2",
+             ".cbz", ".cbr", ".cb7",
+             ".mp3", ".flac", ".m4a", ".ogg", ".wav", ".opus", ".aac", ".m4b",
+             ".jpg", ".jpeg", ".png", ".gif", ".webp"],
+        _ => [],
+    };
 }

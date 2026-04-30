@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Mythra.Application.Abstractions.Background;
+using Mythra.Application.Services.Media;
 using Mythra.Application.Services.Scanning;
 
 namespace Mythra.Infrastructure.Background;
@@ -40,7 +41,13 @@ public sealed class BackgroundJobWorker(
                     if (result.IsFailure) log.LogWarning("Scan failed: {Error}", result.Error);
                     break;
                 }
-                case RefreshMetadataJob:
+                case RefreshMetadataJob refresh:
+                {
+                    var svc = scope.ServiceProvider.GetRequiredService<IMetadataEnrichmentService>();
+                    var result = await svc.EnrichAsync(refresh.MediaItemId, refresh.PreferredProvider, ct);
+                    if (result.IsFailure) log.LogWarning("Metadata enrichment failed for {Id}: {Error}", refresh.MediaItemId, result.Error);
+                    break;
+                }
                 case GenerateThumbnailsJob:
                 case CleanupTranscodeCacheJob:
                     log.LogDebug("Job {Kind} not yet implemented.", job.Kind);

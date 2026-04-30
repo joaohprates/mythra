@@ -9,6 +9,8 @@ import { ChevronLeft } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import { VideoPlayer } from "@/components/media/VideoPlayer";
+import { ExternalPlayer } from "@/components/media/ExternalPlayer";
+import { PlayIMDBPlayer } from "@/components/media/PlayIMDBPlayer";
 import type { VideoItemDetail } from "@/lib/types";
 
 export default function WatchPage() {
@@ -57,6 +59,12 @@ export default function WatchPage() {
 
   if (!profile) return <div className="grid min-h-screen place-items-center text-mythra-text-muted">Choose a profile first.</div>;
 
+  const hasFile = item.data?.hasFile ?? true; // default true so existing items work before fetch
+  const imdbId = item.data?.imdbId;
+  // Priority: local file > PlayIMDB (when IMDB ID known) > other external providers
+  const usePlayImdb = !hasFile && !!imdbId && !!item.data;
+  const isExternalOnly = item.data && !hasFile && !usePlayImdb;
+
   return (
     <main className="relative min-h-screen bg-black">
       <motion.button
@@ -70,47 +78,81 @@ export default function WatchPage() {
       </motion.button>
 
       <div className="mx-auto flex min-h-screen max-w-[1700px] flex-col px-4 pt-20 lg:px-10">
-        <VideoPlayer
-          videoItemId={params.id}
-          profileId={profile.id}
-          initialPositionSeconds={timespanToSeconds(initial.data?.position)}
-          onProgress={handleProgress}
-        />
+
+        {/* ── Player ─────────────────────────────────────────────────────── */}
+        {usePlayImdb ? (
+          <PlayIMDBPlayer imdbId={imdbId!} title={item.data?.title ?? ""} />
+        ) : isExternalOnly ? (
+          <ExternalPlayer
+            mediaItemId={params.id}
+            season={item.data?.seasonNumber}
+            episode={item.data?.episodeNumber}
+            title={item.data?.title ?? ""}
+          />
+        ) : (
+          <VideoPlayer
+            videoItemId={params.id}
+            profileId={profile.id}
+            initialPositionSeconds={timespanToSeconds(initial.data?.position)}
+            onProgress={handleProgress}
+          />
+        )}
+
+        {/* ── Metadata ───────────────────────────────────────────────────── */}
         {item.data && (
           <div className="mt-8 grid gap-6 md:grid-cols-[1fr_320px]">
             <div>
               <h1 className="text-3xl font-bold tracking-tight md:text-4xl">{item.data.title}</h1>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-mythra-text-soft">
                 {item.data.year && <span>{item.data.year}</span>}
-                <span className="rounded-full border border-white/10 px-2 py-0.5">{item.data.resolutionLabel}</span>
+                {!isExternalOnly && (
+                  <span className="rounded-full border border-white/10 px-2 py-0.5">{item.data.resolutionLabel}</span>
+                )}
                 {item.data.duration && <span>{formatDuration(item.data.duration)}</span>}
-                {item.data.genres.slice(0, 3).map((g) => (
+                {(item.data.genres ?? []).slice(0, 3).map((g) => (
                   <span key={g} className="rounded-full border border-white/10 px-2 py-0.5">{g}</span>
                 ))}
+                {usePlayImdb && (
+                  <span className="rounded-full border border-mythra-purple/40 bg-mythra-purple/10 px-2 py-0.5 text-mythra-purple">
+                    Streaming via PlayIMDB
+                  </span>
+                )}
+                {isExternalOnly && !usePlayImdb && (
+                  <span className="rounded-full border border-mythra-purple/40 bg-mythra-purple/10 px-2 py-0.5 text-mythra-purple">
+                    Streaming via external provider
+                  </span>
+                )}
               </div>
               {item.data.overview && <p className="mt-4 text-sm leading-relaxed text-mythra-text-muted">{item.data.overview}</p>}
             </div>
-            <aside className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5 backdrop-blur">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-mythra-text-soft">Streams</h3>
-              <div className="space-y-3">
-                <Group label="Audio">
-                  {item.data.audioTracks.map((a) => (
-                    <li key={a.id}>{a.languageCode.toUpperCase()} • {a.codec} • {a.channelLayout}</li>
-                  ))}
-                </Group>
-                <Group label="Subtitles">
-                  {item.data.subtitles.length === 0 ? <li className="text-mythra-text-soft">None embedded</li> : item.data.subtitles.map((s) => (
-                    <li key={s.id}>{s.languageCode.toUpperCase()} • {s.format}</li>
-                  ))}
-                </Group>
-              </div>
-              <Link
-                href={`/item/${params.id}`}
-                className="mt-4 inline-flex items-center gap-2 text-xs text-mythra-text-soft hover:text-white"
-              >
-                View full details →
-              </Link>
-            </aside>
+
+            {!isExternalOnly && (
+              <aside className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5 backdrop-blur">
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-mythra-text-soft">Streams</h3>
+                <div className="space-y-3">
+                  <Group label="Audio">
+                    {(item.data.audioTracks ?? []).map((a) => (
+                      <li key={a.id}>{a.languageCode.toUpperCase()} • {a.codec} • {a.channelLayout}</li>
+                    ))}
+                  </Group>
+                  <Group label="Subtitles">
+                    {(item.data.subtitles ?? []).length === 0 ? (
+                      <li className="text-mythra-text-soft">None embedded</li>
+                    ) : (
+                      (item.data.subtitles ?? []).map((s) => (
+                        <li key={s.id}>{s.languageCode.toUpperCase()} • {s.format}</li>
+                      ))
+                    )}
+                  </Group>
+                </div>
+                <Link
+                  href={`/item/${params.id}`}
+                  className="mt-4 inline-flex items-center gap-2 text-xs text-mythra-text-soft hover:text-white"
+                >
+                  View full details →
+                </Link>
+              </aside>
+            )}
           </div>
         )}
       </div>

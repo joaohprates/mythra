@@ -1,6 +1,8 @@
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Mythra.Application.Abstractions.Persistence;
+using Mythra.Domain.Media.Books;
 using SharpCompress.Archives;
 using VersOne.Epub;
 
@@ -57,30 +59,139 @@ public sealed class ContentController(
     {
         var book = await books.GetByIdWithChaptersAsync(mediaItemId, ct);
         if (book is null) return NotFound();
-        var chapter = book.Chapters.FirstOrDefault(c => c.Id == chapterId);
-        if (chapter is null) return NotFound();
 
-        if (book.Format != Mythra.Domain.Media.Books.BookFormat.Epub || string.IsNullOrEmpty(chapter.Anchor))
+        // Non-EPUB: tell the client to download instead
+        if (book.Format != BookFormat.Epub)
             return Ok(new
             {
                 chapterId,
-                title = chapter.Title,
-                html = $"<p style='opacity:0.7'>This format ({book.Format}) does not yet support inline rendering. Open the source file directly.</p>",
+                title = "Unsupported format",
+                html = string.Empty,
+                unsupported = true,
+                format = book.Format.ToString(),
+                downloadUrl = $"/api/v1/download/{mediaItemId}",
             });
+
+        if (string.IsNullOrEmpty(book.FilePath) || !System.IO.File.Exists(book.FilePath))
+            return NotFound();
+
+        var chapter = book.Chapters.FirstOrDefault(c => c.Id == chapterId);
+        if (chapter is null) return NotFound();
 
         try
         {
             var epub = await EpubReader.ReadBookAsync(book.FilePath);
-            var contentFile = epub.ReadingOrder.FirstOrDefault(f => f.FilePath == chapter.Anchor);
+
+            // Build image data-URI map so relative <img src> tags resolve
+            var imageMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var img in epub.Content.Images.Local)
+            {
+                try
+                {
+                    var ext = Path.GetExtension(img.FilePath).TrimStart('.').ToLowerInvariant();
+                    var mime = ext switch
+                    {
+                        "png" => "image/png",
+                        "gif" => "image/gif",
+                        "webp" => "image/webp",
+                        "svg" => "image/svg+xml",
+                        _ => "image/jpeg",
+                    };
+                    var data = Convert.ToBase64String(img.Content);
+                    var dataUri = $"data:{mime};base64,{data}";
+                    imageMap[img.FilePath] = dataUri;
+                    imageMap[Path.GetFileName(img.FilePath)] = dataUri;
+                }
+                catch { /* skip unreadable images */ }
+            }
+
+            // Locate the reading-order file. Strip fragment (#) from anchor first.
+            var anchor = chapter.Anchor?.Split('#')[0];
+            var readingOrder = epub.ReadingOrder;
+            var contentFile =
+                // exact match
+                readingOrder.FirstOrDefault(f => string.Equals(f.FilePath, anchor, StringComparison.OrdinalIgnoreCase))
+                // suffix match (handles path-prefix differences)
+                ?? readingOrder.FirstOrDefault(f => anchor != null &&
+                    (f.FilePath?.EndsWith(anchor, StringComparison.OrdinalIgnoreCase) == true
+                     || anchor.EndsWith(Path.GetFileName(f.FilePath ?? ""), StringComparison.OrdinalIgnoreCase)))
+                // fall back to chapter order index
+                ?? (chapter.Order < readingOrder.Count ? readingOrder[chapter.Order] : null);
+
             if (contentFile is null)
                 return NotFound();
-            return Ok(new { chapterId, title = chapter.Title, html = contentFile.Content });
+
+            var html = ProcessEpubHtml(contentFile.Content ?? string.Empty, imageMap);
+            return Ok(new { chapterId, title = chapter.Title, html });
         }
         catch (Exception ex)
         {
-            log.LogWarning(ex, "Failed to extract book chapter content {Anchor} from {Path}", chapter.Anchor, book.FilePath);
+            log.LogWarning(ex, "Failed to extract EPUB chapter {Anchor} from {Path}", chapter.Anchor, book.FilePath);
             return Problem(detail: "Failed to extract chapter.", statusCode: StatusCodes.Status500InternalServerError);
         }
+    }
+
+    /// <summary>
+    /// Returns a JSON list of reading-order file paths for an EPUB — useful when the book
+    /// has no navigation entries and the client needs to construct its own chapter list.
+    /// </summary>
+    [HttpGet("reading-order")]
+    public async Task<IActionResult> GetReadingOrder(Guid mediaItemId, CancellationToken ct)
+    {
+        var book = await books.GetByIdWithChaptersAsync(mediaItemId, ct);
+        if (book is null || book.Format != BookFormat.Epub) return NotFound();
+        if (string.IsNullOrEmpty(book.FilePath) || !System.IO.File.Exists(book.FilePath)) return NotFound();
+
+        try
+        {
+            var epub = await EpubReader.ReadBookAsync(book.FilePath);
+            var items = epub.ReadingOrder
+                .Select((f, i) => new { id = i, title = $"Part {i + 1}", filePath = f.FilePath })
+                .ToList();
+            return Ok(items);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Failed to read EPUB reading order from {Path}", book.FilePath);
+            return Problem(detail: "Failed to read epub.", statusCode: StatusCodes.Status500InternalServerError);
+        }
+    }
+
+    // ── EPUB HTML processing ─────────────────────────────────────────────────
+
+    private static string ProcessEpubHtml(string html, Dictionary<string, string> imageMap)
+    {
+        // Extract <body> content only (discard EPUB XHTML boilerplate)
+        var bodyMatch = Regex.Match(html, @"<body[^>]*>(.*?)</body>",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        if (bodyMatch.Success) html = bodyMatch.Groups[1].Value;
+
+        // Strip <script> tags entirely
+        html = Regex.Replace(html, @"<script[^>]*>.*?</script>", string.Empty,
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+        // Strip <link> (external CSS, fonts, etc.) – we inject our own
+        html = Regex.Replace(html, @"<link\b[^>]*/?>", string.Empty, RegexOptions.IgnoreCase);
+
+        // Strip inline <style> blocks that could break the reader's theme
+        html = Regex.Replace(html, @"<style[^>]*>.*?</style>", string.Empty,
+            RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+        // Replace img src with data URIs
+        html = Regex.Replace(html, @"src=[""']([^""']+)[""']", m =>
+        {
+            var src = m.Groups[1].Value;
+            if (imageMap.TryGetValue(src, out var uri) ||
+                imageMap.TryGetValue(Path.GetFileName(src), out uri))
+                return $"src=\"{uri}\"";
+            return m.Value;
+        }, RegexOptions.IgnoreCase);
+
+        // Remove href anchors that would navigate away
+        html = Regex.Replace(html, @"<a\b([^>]*)href=[""'][^""']*[""']([^>]*)>",
+            "<a$1$2>", RegexOptions.IgnoreCase);
+
+        return html;
     }
 
     [HttpGet("chapters/{chapterId:guid}/stream")]

@@ -12,10 +12,12 @@ namespace Mythra.Api.Controllers;
 public sealed class LibrariesController(ILibraryService libraries) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct) => (await libraries.ListAsync(ct)).ToActionResult();
+    public async Task<IActionResult> List(CancellationToken ct) =>
+        (await libraries.ListAsync(ct)).ToActionResult();
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> Get(Guid id, CancellationToken ct) => (await libraries.GetAsync(id, ct)).ToActionResult();
+    public async Task<IActionResult> Get(Guid id, CancellationToken ct) =>
+        (await libraries.GetAsync(id, ct)).ToActionResult();
 
     [HttpPost]
     [Authorize(Roles = "Admin,Manager")]
@@ -32,15 +34,31 @@ public sealed class LibrariesController(ILibraryService libraries) : ControllerB
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct) =>
         (await libraries.DeleteAsync(id, ct)).ToActionResult();
 
+    // ── Folders ──────────────────────────────────────────────────────────────
+
     [HttpPost("{id:guid}/folders")]
     [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> AddFolder(Guid id, [FromBody] AddFolderRequest req, CancellationToken ct) =>
         (await libraries.AddFolderAsync(id, req, ct)).ToActionResult();
 
+    [HttpPatch("{id:guid}/folders/{folderId:guid}")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> UpdateFolder(Guid id, Guid folderId, [FromBody] UpdateFolderRequest req, CancellationToken ct) =>
+        (await libraries.UpdateFolderAsync(id, folderId, req, ct)).ToActionResult();
+
     [HttpDelete("{id:guid}/folders/{folderId:guid}")]
     [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> RemoveFolder(Guid id, Guid folderId, CancellationToken ct) =>
         (await libraries.RemoveFolderAsync(id, folderId, ct)).ToActionResult();
+
+    // ── Extensions ───────────────────────────────────────────────────────────
+
+    [HttpPut("{id:guid}/extensions")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> UpdateExtensions(Guid id, [FromBody] UpdateExtensionsRequest req, CancellationToken ct) =>
+        (await libraries.UpdateExtensionsAsync(id, req, ct)).ToActionResult();
+
+    // ── Scan ─────────────────────────────────────────────────────────────────
 
     [HttpPost("{id:guid}/scan")]
     [Authorize(Roles = "Admin,Manager")]

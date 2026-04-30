@@ -1,12 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Bell, Search, Sparkles } from "lucide-react";
+import { Bell, Search, Sparkles, Telescope } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth";
 import { cn } from "@/lib/cn";
 import { ProfileBadge } from "./ProfileBadge";
+import { useNotifications } from "@/hooks/useNotifications";
 
 export function Topbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -19,6 +20,7 @@ export function Topbar() {
   }, []);
 
   const user = useAuthStore((s) => s.user);
+  const { unreadCount } = useNotifications();
 
   return (
     <motion.header
@@ -52,6 +54,7 @@ export function Topbar() {
           <NavLink href="/library/all/Manga" label="Manga" />
           <NavLink href="/library/all/Book" label="Books" />
           <NavLink href="/library/all/Audio" label="Audiobooks" />
+          <NavLink href="/discover" label="Discover" icon={<Telescope size={13} />} highlight />
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
@@ -62,12 +65,24 @@ export function Topbar() {
           >
             <Search size={18} />
           </Link>
-          <button
-            className="flex h-10 w-10 items-center justify-center rounded-full text-mythra-text-muted hover:text-white hover:bg-white/5 transition-colors"
+
+          <Link
+            href="/notifications"
+            className="relative flex h-10 w-10 items-center justify-center rounded-full text-mythra-text-muted hover:text-white hover:bg-white/5 transition-colors"
             aria-label="Notifications"
           >
             <Bell size={18} />
-          </button>
+            {unreadCount > 0 && (
+              <motion.span
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-mythra-blue px-1 text-[9px] font-bold text-white leading-none"
+              >
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </motion.span>
+            )}
+          </Link>
+
           {user ? <ProfileBadge /> : (
             <Link
               href="/login"
@@ -82,12 +97,25 @@ export function Topbar() {
   );
 }
 
-function NavLink({ href, label }: { href: string; label: string }) {
+function NavLink({
+  href, label, icon, highlight,
+}: {
+  href: string;
+  label: string;
+  icon?: React.ReactNode;
+  highlight?: boolean;
+}) {
   return (
     <Link
       href={href}
-      className="rounded-full px-4 py-2 text-sm font-medium text-mythra-text-muted hover:text-white transition-colors relative group"
+      className={cn(
+        "flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors relative group",
+        highlight
+          ? "text-mythra-purple hover:text-white"
+          : "text-mythra-text-muted hover:text-white"
+      )}
     >
+      {icon}
       <span className="relative z-10">{label}</span>
       <span className="absolute inset-0 rounded-full bg-white/0 group-hover:bg-white/[0.05] transition-colors" />
     </Link>

@@ -12,4 +12,5 @@ public interface IMediaService
     Task<Result<object>> GetDetailAsync(Guid id, CancellationToken ct = default);
     Task<Result<IReadOnlyList<MediaItemDto>>> RecentlyAddedAsync(Guid? libraryId, int take, CancellationToken ct = default);
     Task<Result<IReadOnlyList<string>>> ListGenresAsync(MediaKind? kind, CancellationToken ct = default);
+    Task<Result<IReadOnlyList<VideoItemDto>>> ListEpisodesAsync(Guid seriesId, CancellationToken ct = default);
 }

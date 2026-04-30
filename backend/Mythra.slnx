@@ -9,5 +9,6 @@
     <Project Path="tests/Mythra.Api.Tests/Mythra.Api.Tests.csproj" />
     <Project Path="tests/Mythra.Application.Tests/Mythra.Application.Tests.csproj" />
     <Project Path="tests/Mythra.Domain.Tests/Mythra.Domain.Tests.csproj" />
+    <Project Path="tests/Mythra.Infrastructure.Tests/Mythra.Infrastructure.Tests.csproj" />
   </Folder>
 </Solution>

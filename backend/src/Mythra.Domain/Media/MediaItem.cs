@@ -32,6 +32,15 @@ public abstract class MediaItem : AggregateRoot
     public string? ProviderMalId { get; set; }
     public string? ProviderMusicbrainzId { get; set; }
     public string? ProviderGoogleBooksId { get; set; }
+    public string? ProviderGutenbergId { get; set; }
+    public string? ProviderLibriVoxId { get; set; }
+    public string? ProviderMangaDexId { get; set; }
+    public string? ProviderArchiveOrgId { get; set; }
+
+    /// <summary>
+    /// Tracks whether the physical file is available locally, missing, or external-only.
+    /// </summary>
+    public string FileStatus { get; set; } = "Available";
 
     public DateTimeOffset? LastScannedAt { get; set; }
     public DateTimeOffset? LastMetadataRefreshAt { get; set; }

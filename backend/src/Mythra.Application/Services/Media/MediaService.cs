@@ -20,6 +20,12 @@ public sealed class MediaService(
 {
     public async Task<Result<PagedResult<MediaItemDto>>> ListAsync(MediaQuery query, CancellationToken ct = default)
     {
+        if (query.Ids is { Count: > 0 })
+        {
+            var byIds = await media.ByIdsAsync(query.Ids, ct);
+            var dtos = byIds.Select(i => i.ToSummary()).ToList();
+            return new PagedResult<MediaItemDto>(dtos, dtos.Count, 0, dtos.Count);
+        }
         var items = await media.SearchAsync(query, ct);
         var total = await media.CountAsync(query, ct);
         return new PagedResult<MediaItemDto>(items.Select(i => i.ToSummary()).ToList(), total, query.Skip, query.Take);
@@ -56,6 +62,13 @@ public sealed class MediaService(
     {
         var list = await genres.ListAsync(kind, ct);
         return Result<IReadOnlyList<string>>.Success(list.Select(g => g.Name).Distinct().OrderBy(n => n).ToList());
+    }
+
+    public async Task<Result<IReadOnlyList<VideoItemDto>>> ListEpisodesAsync(Guid seriesId, CancellationToken ct = default)
+    {
+        var episodes = await videos.ListEpisodesAsync(seriesId, ct);
+        return Result<IReadOnlyList<VideoItemDto>>.Success(
+            episodes.Select(v => v.ToDetail()).ToList());
     }
 
     private async Task<VideoItemDto> LoadVideoDetailAsync(VideoItem v, CancellationToken ct)

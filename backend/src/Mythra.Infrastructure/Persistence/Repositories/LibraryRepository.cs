@@ -17,4 +17,7 @@ public sealed class LibraryRepository(MythraDbContext db) : EfRepository<Library
 
     public Task<Library?> GetWithFoldersAsync(Guid id, CancellationToken ct = default) =>
         Set.Include(l => l.Folders).FirstOrDefaultAsync(l => l.Id == id, ct);
+
+    public Task<Library?> GetSystemLibraryAsync(CancellationToken ct = default) =>
+        Set.FirstOrDefaultAsync(l => l.IsSystem && l.IsEnabled, ct);
 }
