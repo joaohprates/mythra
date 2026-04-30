@@ -49,7 +49,11 @@ public sealed record VideoItemDto(
     IReadOnlyList<string> Genres,
     IReadOnlyList<SubtitleDto> Subtitles,
     IReadOnlyList<AudioTrackDto> AudioTracks,
-    IReadOnlyList<ChapterMarkerDto> ChapterMarkers);
+    IReadOnlyList<ChapterMarkerDto> ChapterMarkers,
+    /// <summary>True when there is a local media file on disk; false for virtual/external-only items.</summary>
+    bool HasFile = true,
+    string? ImdbId = null,
+    Guid? ParentId = null);
 
 public sealed record SubtitleDto(Guid Id, string LanguageCode, string? DisplayName, string Format, SubtitleKind Kind, bool IsDefault, bool IsForced);
 

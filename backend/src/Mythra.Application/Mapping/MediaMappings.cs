@@ -49,10 +49,13 @@ public static class MediaMappings
         v.VideoCodec,
         v.AudioCodec,
         v.Bitrate,
-        v.Genres.Select(g => g.Name).ToList(),
-        v.Subtitles.Select(s => new SubtitleDto(s.Id, s.LanguageCode, s.DisplayName, s.Format, s.Kind, s.IsDefault, s.IsForced)).ToList(),
-        v.AudioTracks.Select(a => new AudioTrackDto(a.Id, a.LanguageCode, a.DisplayName, a.StreamIndex, a.Codec, a.Channels, a.ChannelLayout, a.IsDefault, a.IsCommentary)).ToList(),
-        v.ChapterMarkers.Select(c => new ChapterMarkerDto(c.Id, c.Kind, c.Label, c.Start, c.End, c.ThumbPath)).ToList());
+        (v.Genres ?? []).Select(g => g.Name).ToList(),
+        (v.Subtitles ?? []).Select(s => new SubtitleDto(s.Id, s.LanguageCode, s.DisplayName, s.Format, s.Kind, s.IsDefault, s.IsForced)).ToList(),
+        (v.AudioTracks ?? []).Select(a => new AudioTrackDto(a.Id, a.LanguageCode, a.DisplayName, a.StreamIndex, a.Codec, a.Channels, a.ChannelLayout, a.IsDefault, a.IsCommentary)).ToList(),
+        (v.ChapterMarkers ?? []).Select(c => new ChapterMarkerDto(c.Id, c.Kind, c.Label, c.Start, c.End, c.ThumbPath)).ToList(),
+        HasFile: !string.IsNullOrWhiteSpace(v.FilePath),
+        ImdbId: v.ProviderImdbId,
+        ParentId: v.ParentId);
 
     public static MangaItemDto ToDetail(this MangaItem m) => new(
         m.Id,

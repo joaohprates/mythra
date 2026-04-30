@@ -9,7 +9,8 @@ public sealed class MediaScannerRegistry(IEnumerable<IMediaScanner> scanners) : 
 
     public IMediaScanner? Resolve(LibraryKind kind) =>
         _byKind.TryGetValue(kind, out var scanner) ? scanner :
-        kind == LibraryKind.Anime && _byKind.TryGetValue(LibraryKind.Video, out var video) ? video :
-        kind == LibraryKind.Music && _byKind.TryGetValue(LibraryKind.Audiobook, out var audio) ? audio :
+        kind == LibraryKind.Anime    && _byKind.TryGetValue(LibraryKind.Video,     out var video)  ? video  :
+        kind == LibraryKind.Music    && _byKind.TryGetValue(LibraryKind.Audiobook,  out var audio)  ? audio  :
+        kind == LibraryKind.General  && _byKind.TryGetValue(LibraryKind.General,    out var general)? general:
         null;
 }

@@ -27,6 +27,7 @@ public sealed class BookLibraryScanner(
         var updated = 0;
         var failed = 0;
         var errors = new List<string>();
+        var newItemIds = new List<Guid>();
 
         foreach (var root in rootPaths)
         {
@@ -69,7 +70,7 @@ public sealed class BookLibraryScanner(
                         case ".pdf": EnrichFromPdf(book, entry.Path); break;
                     }
 
-                    if (existing is null) { await books.AddAsync(book, ct); added++; } else updated++;
+                    if (existing is null) { await books.AddAsync(book, ct); newItemIds.Add(book.Id); added++; } else updated++;
                 }
                 catch (Exception ex)
                 {
@@ -82,7 +83,7 @@ public sealed class BookLibraryScanner(
 
         await uow.SaveChangesAsync(ct);
         sw.Stop();
-        return new ScanResult(added, updated, Removed: 0, failed, sw.Elapsed, errors);
+        return new ScanResult(added, updated, Removed: 0, failed, sw.Elapsed, errors, newItemIds);
     }
 
     private static void EnrichFromEpub(BookItem book, string path)

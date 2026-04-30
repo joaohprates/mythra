@@ -1,5 +1,5 @@
 export type MediaKind = "Video" | "Manga" | "Book" | "Audio";
-export type LibraryKind = "Video" | "Anime" | "Manga" | "Book" | "Audiobook" | "Music";
+export type LibraryKind = "Video" | "Anime" | "Manga" | "Book" | "Audiobook" | "Music" | "General" | "Image";
 export type VideoKind = "Movie" | "Series" | "Season" | "Episode" | "Anime" | "AnimeMovie" | "Special" | "Trailer" | "Other";
 export type BookFormat = "Epub" | "Pdf" | "Mobi" | "Azw3" | "Cbz";
 export type AudioKind = "Audiobook" | "Podcast" | "Music" | "Soundtrack";
@@ -66,6 +66,12 @@ export interface VideoItemDetail extends MediaItem {
   subtitles: Subtitle[];
   audioTracks: AudioTrack[];
   chapterMarkers: ChapterMarker[];
+  /** True when a local file exists on disk; false for virtual/external-only items. */
+  hasFile: boolean;
+  /** IMDB title ID, e.g. "tt1234567". Present when metadata was fetched from IMDB/TMDB. */
+  imdbId?: string | null;
+  /** Parent series ID for episodes. */
+  parentId?: string | null;
 }
 
 export interface Subtitle {
@@ -159,16 +165,81 @@ export interface AudioChapter {
   duration: string;
 }
 
+export interface LibraryFolder {
+  id: string;
+  path: string;
+  isActive: boolean;
+}
+
 export interface Library {
   id: string;
   name: string;
   kind: LibraryKind;
   description?: string | null;
   isEnabled: boolean;
+  isSystem: boolean;
   autoRefreshMetadata: boolean;
   lastScannedAt?: string | null;
   folderCount: number;
   itemCount?: number | null;
+  allowedExtensions: string[];
+  effectiveExtensions: string[];
+  folders?: LibraryFolder[];
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+export type NotificationKind =
+  | "MediaAdded" | "ScanCompleted" | "ScanFailed"
+  | "Recommendation" | "ImportCompleted" | "ProviderUnhealthy" | "System";
+
+export interface Notification {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  body?: string | null;
+  actionUrl?: string | null;
+  imageUrl?: string | null;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface NotificationListDto {
+  items: Notification[];
+  unreadCount: number;
+}
+
+// ── Discover ─────────────────────────────────────────────────────────────────
+export interface DiscoverItem {
+  externalId: string;
+  providerKind: string;
+  title: string;
+  originalTitle?: string | null;
+  year?: number | null;
+  rating?: number | null;
+  overview?: string | null;
+  posterPath?: string | null;
+  backdropPath?: string | null;
+  genres: string[];
+  alreadyImported: boolean;
+  existingItemId?: string | null;
+}
+
+export interface DiscoverResult {
+  items: DiscoverItem[];
+  total: number;
+  skip: number;
+  take: number;
+}
+
+export interface ImportResultDto {
+  id: string;
+  title: string;
+  mediaKind: string;
+  hasFile: boolean;
+  fileStatus: string;
+  posterPath?: string | null;
+  libraryId: string;
+  watchUrl: string;
 }
 
 export interface PagedResult<T> {

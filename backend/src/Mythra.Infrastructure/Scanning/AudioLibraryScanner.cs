@@ -25,6 +25,7 @@ public sealed class AudioLibraryScanner(
         var updated = 0;
         var failed = 0;
         var errors = new List<string>();
+        var newItemIds = new List<Guid>();
 
         foreach (var root in rootPaths)
         {
@@ -90,6 +91,7 @@ public sealed class AudioLibraryScanner(
                     }
                     book.Duration = totalDuration;
                     await audios.AddAsync(book, ct);
+                    newItemIds.Add(book.Id);
                     added++;
                 }
                 catch (Exception ex)
@@ -103,6 +105,6 @@ public sealed class AudioLibraryScanner(
 
         await uow.SaveChangesAsync(ct);
         sw.Stop();
-        return new ScanResult(added, updated, Removed: 0, failed, sw.Elapsed, errors);
+        return new ScanResult(added, updated, Removed: 0, failed, sw.Elapsed, errors, newItemIds);
     }
 }

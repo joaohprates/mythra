@@ -8,4 +8,5 @@ public interface ILibraryRepository : IRepository<Library>
     Task<IReadOnlyList<Library>> ListByKindAsync(LibraryKind kind, CancellationToken ct = default);
     Task<Library?> GetByNameAsync(string name, CancellationToken ct = default);
     Task<Library?> GetWithFoldersAsync(Guid id, CancellationToken ct = default);
+    Task<Library?> GetSystemLibraryAsync(CancellationToken ct = default);
 }

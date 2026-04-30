@@ -28,6 +28,7 @@ public sealed class VideoLibraryScanner(
         var updated = 0;
         var failed = 0;
         var errors = new List<string>();
+        var newItemIds = new List<Guid>();
         var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var root in rootPaths)
@@ -70,6 +71,7 @@ public sealed class VideoLibraryScanner(
                         ApplyProbe(item, probeResult, primaryVideo, primaryAudio);
                         item.LastScannedAt = DateTimeOffset.UtcNow;
                         await videos.AddAsync(item, ct);
+                        newItemIds.Add(item.Id);
                         added++;
                     }
                     else
@@ -92,7 +94,7 @@ public sealed class VideoLibraryScanner(
 
         await uow.SaveChangesAsync(ct);
         sw.Stop();
-        return new ScanResult(added, updated, Removed: 0, failed, sw.Elapsed, errors);
+        return new ScanResult(added, updated, Removed: 0, failed, sw.Elapsed, errors, newItemIds);
     }
 
     private static void ApplyProbe(VideoItem item, MediaProbeResult? probe, VideoStreamInfo? primaryVideo, AudioStreamInfo? primaryAudio)

@@ -26,6 +26,7 @@ public static class ResultExtensions
             "validation" => StatusCodes.Status400BadRequest,
             "unauthorized" => StatusCodes.Status401Unauthorized,
             "conflict" => StatusCodes.Status409Conflict,
+            "forbidden" => StatusCodes.Status403Forbidden,
             _ => StatusCodes.Status500InternalServerError,
         };
         var problem = new ProblemDetails

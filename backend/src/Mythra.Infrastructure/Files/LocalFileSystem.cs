@@ -21,6 +21,37 @@ public sealed class LocalFileSystem : IFileSystem
         }
     }
 
+    public IEnumerable<DirectoryEntry> ListDirectories(string path)
+    {
+        if (!Directory.Exists(path)) yield break;
+        foreach (var dir in Directory.EnumerateDirectories(path))
+        {
+            string name;
+            bool readable;
+            try
+            {
+                var info = new DirectoryInfo(dir);
+                name = info.Name;
+                // Quick readability check — try to enumerate top level
+                Directory.GetDirectories(dir);
+                readable = true;
+            }
+            catch
+            {
+                name = Path.GetFileName(dir);
+                readable = false;
+            }
+            yield return new DirectoryEntry(name, dir.Replace('\\', '/'), readable);
+        }
+    }
+
+    public bool IsReadable(string path)
+    {
+        if (!Directory.Exists(path)) return false;
+        try { Directory.GetDirectories(path); return true; }
+        catch { return false; }
+    }
+
     public Task<Stream> OpenReadAsync(string path, CancellationToken ct = default) =>
         Task.FromResult<Stream>(File.OpenRead(path));
 

@@ -33,7 +33,18 @@ public sealed class LibraryService(
             return Error.Conflict("Library name already exists.");
         try
         {
-            var lib = new Library(req.Name, req.Kind) { Description = req.Description };
+            var lib = new Library(req.Name, req.Kind)
+            {
+                Description = req.Description,
+                PreferredLanguage = req.PreferredLanguage,
+                PreferredMetadataProvider = req.PreferredMetadataProvider,
+            };
+            if (req.AllowedExtensions is { Count: > 0 })
+                lib.AllowedExtensions = req.AllowedExtensions
+                    .Select(e => e.StartsWith('.') ? e.ToLowerInvariant() : $".{e.ToLowerInvariant()}")
+                    .Distinct()
+                    .ToList();
+
             foreach (var f in req.Folders.Distinct(StringComparer.OrdinalIgnoreCase)) lib.AddFolder(f);
             await libraries.AddAsync(lib, ct);
             await uow.SaveChangesAsync(ct);
@@ -50,12 +61,19 @@ public sealed class LibraryService(
     {
         var lib = await libraries.GetWithFoldersAsync(id, ct);
         if (lib is null) return Error.NotFound("Library", id);
+
         if (req.Name is not null) lib.Rename(req.Name);
         if (req.Description is not null) lib.Description = req.Description;
         if (req.IsEnabled.HasValue) lib.IsEnabled = req.IsEnabled.Value;
         if (req.AutoRefreshMetadata.HasValue) lib.AutoRefreshMetadata = req.AutoRefreshMetadata.Value;
         if (req.PreferredLanguage is not null) lib.PreferredLanguage = req.PreferredLanguage;
         if (req.PreferredMetadataProvider is not null) lib.PreferredMetadataProvider = req.PreferredMetadataProvider;
+        if (req.AllowedExtensions is not null)
+            lib.AllowedExtensions = req.AllowedExtensions
+                .Select(e => e.StartsWith('.') ? e.ToLowerInvariant() : $".{e.ToLowerInvariant()}")
+                .Distinct()
+                .ToList();
+
         lib.Touch();
         await uow.SaveChangesAsync(ct);
         return lib.ToDetail();
@@ -65,6 +83,7 @@ public sealed class LibraryService(
     {
         var lib = await libraries.GetByIdAsync(id, ct);
         if (lib is null) return Error.NotFound("Library", id);
+        if (lib.IsSystem) return Error.Validation("System libraries cannot be deleted.");
         libraries.Remove(lib);
         await uow.SaveChangesAsync(ct);
         return Result.Success();
@@ -86,6 +105,30 @@ public sealed class LibraryService(
         }
     }
 
+    public async Task<Result<LibraryDetailDto>> UpdateFolderAsync(Guid id, Guid folderId, UpdateFolderRequest req, CancellationToken ct = default)
+    {
+        var lib = await libraries.GetWithFoldersAsync(id, ct);
+        if (lib is null) return Error.NotFound("Library", id);
+
+        var folder = lib.Folders.FirstOrDefault(f => f.Id == folderId);
+        if (folder is null) return Error.NotFound("LibraryFolder", folderId);
+
+        if (req.Path is not null)
+        {
+            var trimmed = req.Path.Trim();
+            if (lib.Folders.Any(f => f.Id != folderId &&
+                string.Equals(f.Path, trimmed, StringComparison.OrdinalIgnoreCase)))
+                return Error.Conflict($"Folder '{trimmed}' is already part of this library.");
+            folder.Path = trimmed;
+        }
+
+        if (req.IsActive.HasValue) folder.IsActive = req.IsActive.Value;
+        lib.Touch();
+        await uow.SaveChangesAsync(ct);
+        log.LogInformation("Updated folder {FolderId} on library {LibraryId}", folderId, id);
+        return lib.ToDetail();
+    }
+
     public async Task<Result> RemoveFolderAsync(Guid id, Guid folderId, CancellationToken ct = default)
     {
         var lib = await libraries.GetWithFoldersAsync(id, ct);
@@ -96,6 +139,23 @@ public sealed class LibraryService(
         lib.Touch();
         await uow.SaveChangesAsync(ct);
         return Result.Success();
+    }
+
+    public async Task<Result<LibraryDetailDto>> UpdateExtensionsAsync(Guid id, UpdateExtensionsRequest req, CancellationToken ct = default)
+    {
+        var lib = await libraries.GetWithFoldersAsync(id, ct);
+        if (lib is null) return Error.NotFound("Library", id);
+
+        lib.AllowedExtensions = req.Extensions
+            .Select(e => e.Trim())
+            .Where(e => !string.IsNullOrEmpty(e))
+            .Select(e => e.StartsWith('.') ? e.ToLowerInvariant() : $".{e.ToLowerInvariant()}")
+            .Distinct()
+            .ToList();
+
+        lib.Touch();
+        await uow.SaveChangesAsync(ct);
+        return lib.ToDetail();
     }
 
     public async Task<Result<Guid>> EnqueueScanAsync(Guid id, CancellationToken ct = default)

@@ -7,6 +7,8 @@ using Mythra.Domain.Media.Audio;
 using Mythra.Domain.Media.Books;
 using Mythra.Domain.Media.Manga;
 using Mythra.Domain.Media.Video;
+using Mythra.Domain.Addons;
+using Mythra.Domain.Notifications;
 using Mythra.Domain.Progress;
 using Mythra.Domain.Streaming;
 using Mythra.Domain.SyncPlay;
@@ -48,6 +50,9 @@ public sealed class MythraDbContext(DbContextOptions<MythraDbContext> options) :
     public DbSet<StreamSession> StreamSessions => Set<StreamSession>();
     public DbSet<SyncRoom> SyncRooms => Set<SyncRoom>();
     public DbSet<SyncMember> SyncMembers => Set<SyncMember>();
+
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<Addon> Addons => Set<Addon>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

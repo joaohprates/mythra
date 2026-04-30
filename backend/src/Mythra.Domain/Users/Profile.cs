@@ -15,6 +15,19 @@ public sealed class Profile : Entity
     public List<MediaKind> EnabledMediaKinds { get; set; } = [
         MediaKind.Video, MediaKind.Manga, MediaKind.Book, MediaKind.Audio];
 
+    // ── Language preferences ──────────────────────────────────────────────────
+    /// <summary>Preferred language for metadata titles and overviews (e.g. "pt-BR", "en", "ja").</summary>
+    public string? PreferredContentLanguage { get; set; }
+
+    /// <summary>Default subtitle language code to auto-select in the player (e.g. "pt", "en").</summary>
+    public string? PreferredSubtitleLanguage { get; set; }
+
+    /// <summary>Default audio track language code to auto-select in the player (e.g. "pt", "ja").</summary>
+    public string? PreferredAudioLanguage { get; set; }
+
+    /// <summary>When true, always show the original title instead of the localised one.</summary>
+    public bool ShowOriginalTitle { get; set; } = false;
+
     private Profile() { }
 
     public Profile(Guid userId, string name)
@@ -30,6 +43,19 @@ public sealed class Profile : Entity
         if (string.IsNullOrWhiteSpace(newName))
             throw new InvariantViolationException("Profile name is required.");
         Name = newName.Trim();
+        Touch();
+    }
+
+    public void UpdateLanguagePreferences(
+        string? contentLanguage,
+        string? subtitleLanguage,
+        string? audioLanguage,
+        bool? showOriginalTitle)
+    {
+        if (contentLanguage  is not null) PreferredContentLanguage  = contentLanguage;
+        if (subtitleLanguage is not null) PreferredSubtitleLanguage = subtitleLanguage;
+        if (audioLanguage    is not null) PreferredAudioLanguage    = audioLanguage;
+        if (showOriginalTitle.HasValue)   ShowOriginalTitle          = showOriginalTitle.Value;
         Touch();
     }
 }

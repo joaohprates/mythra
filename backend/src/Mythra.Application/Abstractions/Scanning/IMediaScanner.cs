@@ -8,7 +8,8 @@ public sealed record ScanResult(
     int Removed,
     int Failed,
     TimeSpan Elapsed,
-    IReadOnlyList<string> Errors);
+    IReadOnlyList<string> Errors,
+    IReadOnlyList<Guid>? NewItemIds = null);
 
 public interface IMediaScanner
 {

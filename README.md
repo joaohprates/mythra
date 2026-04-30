@@ -62,11 +62,11 @@ mythra/
 cd backend && dotnet build Mythra.slnx
 
 # 2. Install frontend deps
-cd ../frontend && npm install
+cd frontend && npm install
 
 # 3. Start backend (auto-creates SQLite schema in dev)
-cd ../backend && dotnet run --project src/Mythra.Api
-#   API:        http://localhost:5080
+cd backend && dotnet run --project src/Mythra.Api
+#   API:        http://localhost:5080cla
 #   Swagger:    http://localhost:5080/swagger
 #   Metrics:    http://localhost:5080/metrics
 #   Health:     http://localhost:5080/api/v1/health

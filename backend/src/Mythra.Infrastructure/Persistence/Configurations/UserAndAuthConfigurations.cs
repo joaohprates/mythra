@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Mythra.Domain.Media;
 using Mythra.Domain.Users;
 
 namespace Mythra.Infrastructure.Persistence.Configurations;
@@ -35,8 +37,16 @@ public sealed class ProfileConfiguration : IEntityTypeConfiguration<Profile>
         b.Property(p => p.EnabledMediaKinds).HasConversion(
             v => string.Join(',', v.Select(k => (int)k)),
             v => v.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                  .Select(s => (Mythra.Domain.Media.MediaKind)int.Parse(s))
-                  .ToList());
+                  .Select(s => (MediaKind)int.Parse(s))
+                  .ToList(),
+            new ValueComparer<List<MediaKind>>(
+                (a, b) => a != null && b != null && a.SequenceEqual(b),
+                c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                c => c.ToList()));
+        b.Property(p => p.PreferredContentLanguage).HasMaxLength(10);
+        b.Property(p => p.PreferredSubtitleLanguage).HasMaxLength(10);
+        b.Property(p => p.PreferredAudioLanguage).HasMaxLength(10);
+        b.Property(p => p.ShowOriginalTitle).HasDefaultValue(false);
         b.HasIndex(p => new { p.UserId, p.Name }).IsUnique();
     }
 }
