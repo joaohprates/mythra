@@ -60,6 +60,11 @@ coverage*.info
 *.lock.json
 *.swp
 
+# Local override settings (may contain real API keys / secrets)
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Local.json
+
 # SQLite local files
 *.db
 *.db-journal

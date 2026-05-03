@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <PackageId>Mythra.Addons.Contracts</PackageId>
+    <Version>1.0.0</Version>
+    <Description>Contracts, interfaces and models for building Mythra addons.</Description>
+    <Authors>Mythra Team</Authors>
+  </PropertyGroup>
+
+  <!-- Only Microsoft.Extensions.Logging.Abstractions — keep the surface area minimal so
+       addon authors don't need to take on heavy ASP.NET dependencies. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

@@ -11,23 +11,72 @@ namespace Mythra.Api.Controllers;
 [Authorize]
 public sealed class DiscoverController(IDiscoverService discover) : ControllerBase
 {
-    /// <summary>Search external metadata providers for content to import.</summary>
+    /// <summary>
+    /// Discover content. Two modes:
+    ///   • Catalog browsing: leave <c>q</c> empty, pass <c>type</c> + <c>category</c>.
+    ///   • Search: pass a <c>q</c> string.
+    /// Pagination via <c>page</c> (1-based) or raw <c>skip</c>/<c>take</c>.
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> Search(
         [FromQuery] string q = "",
-        [FromQuery] string kind = "Video",
-        [FromQuery] int skip = 0,
-        [FromQuery] int take = 18,
+        [FromQuery] string type = "movie",                  // movie | series | anime | manga | book | music
+        [FromQuery] string category = "popular",            // popular | trending | top | year | rating
+        [FromQuery] string? kind = null,                    // optional MediaKind override
+        [FromQuery] string? provider = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int? skip = null,
+        [FromQuery] int take = 20,
         CancellationToken ct = default)
     {
-        if (!Enum.TryParse<MediaKind>(kind, ignoreCase: true, out var mediaKind))
-            return BadRequest(new { error = "InvalidKind", message = $"'{kind}' is not a valid media kind." });
+        var resolvedKind = ResolveKind(kind, type);
+        if (resolvedKind is null)
+            return BadRequest(new { error = "InvalidKind", message = $"Unsupported kind/type combination: kind='{kind}' type='{type}'." });
 
-        return (await discover.SearchAsync(q, mediaKind, skip, take, ct)).ToActionResult();
+        var safeTake = Math.Clamp(take, 1, 60);
+        var safeSkip = skip ?? Math.Max(0, (page - 1) * safeTake);
+
+        var query = new DiscoverQuery(
+            Query:    string.IsNullOrWhiteSpace(q) ? null : q.Trim(),
+            Kind:     resolvedKind.Value,
+            Type:     NormalizeType(type),
+            Category: string.IsNullOrWhiteSpace(category) ? "popular" : category.Trim().ToLowerInvariant(),
+            Skip:     safeSkip,
+            Take:     safeTake,
+            Provider: provider);
+
+        return (await discover.SearchAsync(query, ct)).ToActionResult();
     }
 
     /// <summary>Import an external item into the local library (no file download — streams externally).</summary>
     [HttpPost("import")]
     public async Task<IActionResult> Import([FromBody] ImportExternalRequest req, CancellationToken ct = default)
         => (await discover.ImportAsync(req, ct)).ToCreated("/api/v1/items/{0}");
+
+    private static MediaKind? ResolveKind(string? explicitKind, string type)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitKind)
+            && Enum.TryParse<MediaKind>(explicitKind, ignoreCase: true, out var parsed))
+            return parsed;
+
+        return type?.ToLowerInvariant() switch
+        {
+            "movie" or "series" or "anime" => MediaKind.Video,
+            "manga" => MediaKind.Manga,
+            "book"  => MediaKind.Book,
+            "music" or "audio" or "audiobook" => MediaKind.Audio,
+            _ => null,
+        };
+    }
+
+    private static string NormalizeType(string type) => type?.ToLowerInvariant() switch
+    {
+        "movie" or "movies"  => "movie",
+        "series" or "tv"     => "series",
+        "anime"              => "anime",
+        "manga"              => "manga",
+        "book" or "books"    => "book",
+        "music" or "audio"   => "music",
+        _ => "movie",
+    };
 }

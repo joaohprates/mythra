@@ -30,6 +30,7 @@ public sealed class VideoLibraryScanner(
         var errors = new List<string>();
         var newItemIds = new List<Guid>();
         var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var extensions = VideoExtensions;
 
         foreach (var root in rootPaths)
         {
@@ -42,7 +43,7 @@ public sealed class VideoLibraryScanner(
             foreach (var entry in fs.EnumerateFiles(root, "*", recursive: true))
             {
                 ct.ThrowIfCancellationRequested();
-                if (!VideoExtensions.Contains(Path.GetExtension(entry.Path).ToLowerInvariant())) continue;
+                if (!extensions.Contains(Path.GetExtension(entry.Path).ToLowerInvariant())) continue;
                 seenPaths.Add(entry.Path);
 
                 try

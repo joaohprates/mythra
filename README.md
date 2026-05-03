@@ -59,20 +59,24 @@ mythra/
 
 ```bash
 # 1. Restore + build backend
-cd backend && dotnet build Mythra.slnx
+cd backend 
+dotnet build Mythra.slnx
 
 # 2. Install frontend deps
-cd frontend && npm install
+cd frontend
+npm install
 
 # 3. Start backend (auto-creates SQLite schema in dev)
-cd backend && dotnet run --project src/Mythra.Api
+cd backend
+dotnet run --project src/Mythra.Api
 #   API:        http://localhost:5080cla
 #   Swagger:    http://localhost:5080/swagger
 #   Metrics:    http://localhost:5080/metrics
 #   Health:     http://localhost:5080/api/v1/health
 
 # 4. Start frontend
-cd ../frontend && npm run dev
+cd frontend 
+npm run dev
 #   Web:        http://localhost:3000
 ```
 
@@ -93,13 +97,15 @@ folders here and create libraries pointing at `/media/...` paths.
 
 ```bash
 # Backend
-cd backend && dotnet test Mythra.slnx
+cd backend 
+dotnet test Mythra.slnx
 #   ✔ Mythra.Domain.Tests        33 passed
 #   ✔ Mythra.Application.Tests    6 passed
 #   ✔ Mythra.Api.Tests            2 passed
 
 # Frontend
-cd frontend && npm test
+cd frontend 
+npm test
 #   ✔ src/lib/__tests__/cn.test.ts        3 passed
 #   ✔ src/lib/__tests__/motion.test.ts    3 passed
 ```

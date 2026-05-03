@@ -21,12 +21,19 @@ public sealed class MusicBrainzMetadataProvider(
     public async Task<IReadOnlyList<MetadataSearchResult>> SearchAsync(string query, MediaKind kind, int? year, CancellationToken ct = default)
     {
         if (!Supports(kind)) return [];
-        var url = $"/release/?query={Uri.EscapeDataString(query)}&fmt=json&limit=20";
+        var url = $"release/?query={Uri.EscapeDataString(query)}&fmt=json&limit=20";
         try
         {
             var json = await http.GetFromJsonAsync<JsonElement>(url, ct);
             if (!json.TryGetProperty("releases", out var releases)) return [];
-            return releases.EnumerateArray().Select(Map).ToList();
+
+            var results = new List<MetadataSearchResult>();
+            foreach (var r in releases.EnumerateArray())
+            {
+                var mapped = TryMap(r);
+                if (mapped is not null) results.Add(mapped);
+            }
+            return results;
         }
         catch (Exception ex)
         {
@@ -35,27 +42,65 @@ public sealed class MusicBrainzMetadataProvider(
         }
     }
 
-    public Task<MetadataSearchResult?> GetByIdAsync(string providerId, MediaKind kind, CancellationToken ct = default) =>
-        Task.FromResult<MetadataSearchResult?>(null);
-
-    private static MetadataSearchResult Map(JsonElement r)
+    public async Task<MetadataSearchResult?> GetByIdAsync(string providerId, MediaKind kind, CancellationToken ct = default)
     {
-        var id = r.GetProperty("id").GetString() ?? "";
-        var title = r.TryGetProperty("title", out var t) ? t.GetString() ?? "Untitled" : "Untitled";
-        var artist = r.TryGetProperty("artist-credit", out var ac) && ac.GetArrayLength() > 0
-            ? ac[0].GetProperty("name").GetString() : null;
-        var date = r.TryGetProperty("date", out var dt) ? dt.GetString() : null;
-        DateOnly? releaseDate = !string.IsNullOrEmpty(date) && DateOnly.TryParse(date, out var d) ? d : null;
-        return new MetadataSearchResult(
-            ProviderId: id,
-            Title: title,
-            OriginalTitle: artist,
-            Overview: null,
-            ReleaseDate: releaseDate,
-            PosterUrl: null,
-            BackdropUrl: null,
-            Rating: null,
-            Genres: [],
-            ProviderIds: new Dictionary<string, string> { ["musicbrainz"] = id });
+        if (!Supports(kind)) return null;
+        // Fetch release details including artist credits.
+        var url = $"release/{Uri.EscapeDataString(providerId)}?fmt=json&inc=artist-credits+labels";
+        try
+        {
+            var json = await http.GetFromJsonAsync<JsonElement>(url, ct);
+            return TryMap(json);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "MusicBrainz fetch failed for {Id}", providerId);
+            return null;
+        }
+    }
+
+    private static MetadataSearchResult? TryMap(JsonElement r)
+    {
+        try
+        {
+            if (!r.TryGetProperty("id", out var idProp)) return null;
+            var id = idProp.GetString() ?? "";
+            if (string.IsNullOrEmpty(id)) return null;
+
+            var title = r.TryGetProperty("title", out var t) ? t.GetString() ?? "Untitled" : "Untitled";
+
+            string? artist = null;
+            if (r.TryGetProperty("artist-credit", out var ac) && ac.GetArrayLength() > 0
+                && ac[0].TryGetProperty("name", out var an))
+                artist = an.GetString();
+
+            DateOnly? releaseDate = null;
+            if (r.TryGetProperty("date", out var dt))
+            {
+                var raw = dt.GetString();
+                if (!string.IsNullOrEmpty(raw))
+                {
+                    if (DateOnly.TryParse(raw, out var d)) releaseDate = d;
+                    else if (raw.Length >= 4 && int.TryParse(raw[..4], out var yr))
+                        releaseDate = new DateOnly(yr, 1, 1);
+                }
+            }
+
+            return new MetadataSearchResult(
+                ProviderId:    id,
+                Title:         title,
+                OriginalTitle: artist,
+                Overview:      null,
+                ReleaseDate:   releaseDate,
+                PosterUrl:     null,
+                BackdropUrl:   null,
+                Rating:        null,
+                Genres:        [],
+                ProviderIds:   new Dictionary<string, string> { ["musicbrainz"] = id });
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

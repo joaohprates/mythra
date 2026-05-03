@@ -19,9 +19,10 @@ public class MediaServiceTests
     private readonly Mock<IBookRepository> _books = new();
     private readonly Mock<IAudioRepository> _audios = new();
     private readonly Mock<IGenreRepository> _genres = new();
+    private readonly Mock<IUnitOfWork> _uow = new();
 
     private MediaService Build() =>
-        new(_media.Object, _videos.Object, _mangas.Object, _books.Object, _audios.Object, _genres.Object);
+        new(_media.Object, _videos.Object, _mangas.Object, _books.Object, _audios.Object, _genres.Object, _uow.Object);
 
     // ── ListAsync ──────────────────────────────────────────────────────────────
 

@@ -41,6 +41,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Mythra.Addons.Contracts\Mythra.Addons.Contracts.csproj" />
     <ProjectReference Include="..\Mythra.Application\Mythra.Application.csproj" />
     <ProjectReference Include="..\Mythra.Domain\Mythra.Domain.csproj" />
   </ItemGroup>

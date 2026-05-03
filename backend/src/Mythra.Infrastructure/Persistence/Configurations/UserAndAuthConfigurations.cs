@@ -47,6 +47,7 @@ public sealed class ProfileConfiguration : IEntityTypeConfiguration<Profile>
         b.Property(p => p.PreferredSubtitleLanguage).HasMaxLength(10);
         b.Property(p => p.PreferredAudioLanguage).HasMaxLength(10);
         b.Property(p => p.ShowOriginalTitle).HasDefaultValue(false);
+        b.Property(p => p.ShowAdultContent).HasDefaultValue(false);
         b.HasIndex(p => new { p.UserId, p.Name }).IsUnique();
     }
 }

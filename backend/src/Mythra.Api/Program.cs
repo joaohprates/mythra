@@ -185,11 +185,51 @@ app.Run();
 // ================= DB INIT =================
 static async Task EnsureDatabaseAsync(WebApplication app)
 {
-    if (!app.Environment.IsDevelopment()) return;
-
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<MythraDbContext>();
-    await db.Database.EnsureCreatedAsync();
+
+    if (!app.Environment.IsProduction())
+    {
+        // Create schema for new databases; for existing ones this is a no-op.
+        await db.Database.EnsureCreatedAsync();
+        // Idempotently apply incremental changes that EnsureCreated misses on existing DBs.
+        await ApplySchemaDeltasAsync(db);
+    }
+    else
+    {
+        await db.Database.MigrateAsync();
+    }
+}
+
+static async Task ApplySchemaDeltasAsync(MythraDbContext db)
+{
+    // ShowAdultContent on profiles — safe to ignore if already present.
+    try
+    {
+        await db.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE profiles ADD COLUMN ShowAdultContent INTEGER NOT NULL DEFAULT 0");
+    }
+    catch { /* column already exists */ }
+
+    // favorite_items table and indexes — IF NOT EXISTS makes these idempotent.
+    await db.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS favorite_items (
+            Id TEXT NOT NULL,
+            ProfileId TEXT NOT NULL,
+            MediaItemId TEXT NOT NULL,
+            AddedAt TEXT NOT NULL,
+            CreatedAt INTEGER NOT NULL,
+            UpdatedAt INTEGER NULL,
+            CONSTRAINT PK_favorite_items PRIMARY KEY (Id)
+        )");
+
+    await db.Database.ExecuteSqlRawAsync(@"
+        CREATE UNIQUE INDEX IF NOT EXISTS IX_favorite_items_ProfileId_MediaItemId
+        ON favorite_items (ProfileId, MediaItemId)");
+
+    await db.Database.ExecuteSqlRawAsync(@"
+        CREATE INDEX IF NOT EXISTS IX_favorite_items_ProfileId
+        ON favorite_items (ProfileId)");
 }
 
 // ================= BOOTSTRAP =================

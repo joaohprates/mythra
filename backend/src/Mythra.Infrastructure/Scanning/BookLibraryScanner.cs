@@ -28,6 +28,7 @@ public sealed class BookLibraryScanner(
         var failed = 0;
         var errors = new List<string>();
         var newItemIds = new List<Guid>();
+        var extensions = BookExtensions;
 
         foreach (var root in rootPaths)
         {
@@ -41,7 +42,7 @@ public sealed class BookLibraryScanner(
             {
                 ct.ThrowIfCancellationRequested();
                 var ext = Path.GetExtension(entry.Path).ToLowerInvariant();
-                if (!BookExtensions.Contains(ext)) continue;
+                if (!extensions.Contains(ext)) continue;
 
                 try
                 {

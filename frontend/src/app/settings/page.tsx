@@ -1,15 +1,18 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Folder, Plus, RefreshCw, Trash2, X, ChevronRight,
   Library, User, Settings2, Play, Globe, Database,
   FolderOpen, Check, Edit2, AlertTriangle, Package,
-  Download, Upload, ToggleLeft, ToggleRight,
+  Download, Upload, ToggleLeft, ToggleRight, ShieldAlert,
 } from "lucide-react";
+import { useProfilePrefs } from "@/store/profile";
+import { useLocaleStore, useTranslation } from "@/store/locale";
+import { LOCALES, type Locale } from "@/lib/i18n";
 import { Topbar } from "@/components/shell/Topbar";
 import { PageScaffold } from "@/components/shell/PageScaffold";
 import { FolderBrowser } from "@/components/settings/FolderBrowser";
@@ -17,17 +20,19 @@ import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import type { Library as LibraryType, LibraryFolder, Profile } from "@/lib/types";
 
-type SectionId = "libraries" | "profiles" | "account" | "playback" | "language" | "metadata" | "addons";
+type SectionId = "libraries" | "profiles" | "account" | "playback" | "language" | "metadata" | "addons" | "adult";
 
-const SECTIONS: { id: SectionId; label: string; icon: React.ReactNode }[] = [
-  { id: "libraries", label: "Libraries",  icon: <Library size={15} /> },
-  { id: "profiles",  label: "Profiles",   icon: <User size={15} /> },
-  { id: "addons",    label: "Addons",     icon: <Package size={15} /> },
-  { id: "language",  label: "Language",   icon: <Globe size={15} /> },
-  { id: "playback",  label: "Playback",   icon: <Play size={15} /> },
-  { id: "metadata",  label: "Metadata",   icon: <Database size={15} /> },
-  { id: "account",   label: "Account",    icon: <Settings2 size={15} /> },
-];
+const SECTION_IDS: SectionId[] = ["libraries", "profiles", "addons", "language", "playback", "metadata", "adult", "account"];
+const SECTION_ICONS: Record<SectionId, React.ReactNode> = {
+  libraries: <Library size={15} />,
+  profiles:  <User size={15} />,
+  addons:    <Package size={15} />,
+  language:  <Globe size={15} />,
+  playback:  <Play size={15} />,
+  metadata:  <Database size={15} />,
+  adult:     <ShieldAlert size={15} />,
+  account:   <Settings2 size={15} />,
+};
 
 const LIBRARY_KINDS = ["Video", "Anime", "Manga", "Book", "Audiobook", "Music", "General"];
 
@@ -37,9 +42,16 @@ export default function SettingsPage() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const clear = useAuthStore((s) => s.clear);
   const qc = useQueryClient();
+  const t = useTranslation();
 
   const [section, setSection] = useState<SectionId>("libraries");
   const [editingLib, setEditingLib] = useState<LibraryType | null>(null);
+
+  const SECTIONS = SECTION_IDS.map((id) => ({
+    id,
+    label: t(`settings.nav.${id}` as Parameters<typeof t>[0]),
+    icon: SECTION_ICONS[id],
+  }));
 
   useEffect(() => {
     const hash = window.location.hash.replace("#", "") as SectionId;
@@ -69,9 +81,9 @@ export default function SettingsPage() {
       <PageScaffold>
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="mb-1 text-3xl font-bold tracking-tight md:text-4xl">
-            <span className="gradient-text">Settings</span>
+            <span className="gradient-text">{t("settings.title")}</span>
           </h1>
-          <p className="text-sm text-mythra-text-muted">Manage profiles, libraries, and preferences.</p>
+          <p className="text-sm text-mythra-text-muted">{t("settings.subtitle")}</p>
         </motion.div>
 
         <div className="mt-10 grid gap-8 lg:grid-cols-[240px_1fr]">
@@ -117,6 +129,7 @@ export default function SettingsPage() {
                 {section === "addons" && <AddonsSection />}
                 {section === "language" && <LanguageSection />}
                 {section === "playback" && <PlaybackSection />}
+                {section === "adult"   && <AdultContentSection />}
                 {section === "account" && <AccountSection user={user} onSignOut={() => { clear(); router.replace("/login"); }} />}
                 {section === "metadata" && <MetadataSection />}
               </motion.div>
@@ -155,16 +168,17 @@ function LibrariesSection({
   onEdit: (lib: LibraryType) => void;
 }) {
   const [creating, setCreating] = useState(false);
+  const t = useTranslation();
 
   return (
     <div className="rounded-3xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Libraries</h2>
+        <h2 className="text-lg font-semibold">{t("settings.libs.title")}</h2>
         <button
           onClick={() => setCreating(true)}
           className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-mythra-purple to-mythra-blue px-4 py-2 text-xs font-medium text-white"
         >
-          <Plus size={14} /> New library
+          <Plus size={14} /> {t("settings.libs.newLib")}
         </button>
       </div>
 
@@ -177,10 +191,10 @@ function LibrariesSection({
         )}
       </AnimatePresence>
 
-      {loading && <p className="mt-6 text-sm text-mythra-text-muted">Loading…</p>}
+      {loading && <p className="mt-6 text-sm text-mythra-text-muted">{t("common.loading")}</p>}
 
       {!loading && libs.length === 0 && (
-        <p className="mt-6 text-sm text-mythra-text-muted">No libraries yet. Create one to start scanning content.</p>
+        <p className="mt-6 text-sm text-mythra-text-muted">{t("settings.libs.noLibs")}</p>
       )}
 
       <ul className="mt-6 space-y-3">
@@ -195,6 +209,7 @@ function LibrariesSection({
 function LibraryRow({ lib, onRefreshed, onEdit }: { lib: LibraryType; onRefreshed: () => void; onEdit: (lib: LibraryType) => void }) {
   const [scanning, setScanning] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const t = useTranslation();
 
   const scan = async () => {
     setScanning(true);
@@ -203,7 +218,7 @@ function LibraryRow({ lib, onRefreshed, onEdit }: { lib: LibraryType; onRefreshe
   };
 
   const del = async () => {
-    if (!confirm(`Delete library "${lib.name}"? This won't delete files on disk.`)) return;
+    if (!confirm(t("settings.libs.deleteConfirm", { name: lib.name }))) return;
     setDeleting(true);
     try { await api.delete(`/libraries/${lib.id}`); onRefreshed(); }
     finally { setDeleting(false); }
@@ -219,21 +234,21 @@ function LibraryRow({ lib, onRefreshed, onEdit }: { lib: LibraryType; onRefreshe
           <p className="font-medium">
             {lib.name}
             {lib.isSystem && (
-              <span className="ml-2 rounded-full bg-mythra-blue/20 px-2 py-0.5 text-[10px] text-mythra-blue">System</span>
+              <span className="ml-2 rounded-full bg-mythra-blue/20 px-2 py-0.5 text-[10px] text-mythra-blue">{t("settings.libs.system")}</span>
             )}
           </p>
           <p className="truncate text-xs text-mythra-text-soft">
             {lib.kind} · {lib.folderCount} folder{lib.folderCount !== 1 ? "s" : ""}
-            {lib.lastScannedAt ? ` · scanned ${new Date(lib.lastScannedAt).toLocaleString()}` : " · never scanned"}
+            {lib.lastScannedAt ? ` · scanned ${new Date(lib.lastScannedAt).toLocaleString()}` : ` · ${t("settings.libs.neverScanned")}`}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">
           <button onClick={() => onEdit(lib)} className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-xs hover:bg-white/10">
-            <Edit2 size={12} /> Edit
+            <Edit2 size={12} /> {t("settings.libs.edit")}
           </button>
           <button onClick={scan} disabled={scanning} className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-xs hover:bg-white/10 disabled:opacity-50">
             <RefreshCw size={12} className={scanning ? "animate-spin" : ""} />
-            {scanning ? "Scanning…" : "Scan"}
+            {scanning ? t("settings.libs.scanning") : t("settings.libs.scan")}
           </button>
           {!lib.isSystem && (
             <button onClick={del} disabled={deleting} className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 disabled:opacity-50">
@@ -254,6 +269,7 @@ function CreateLibraryForm({ onCreated, onCancel }: { onCreated: () => void; onC
   const [folder, setFolder] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [browsingFolder, setBrowsingFolder] = useState(false);
+  const t = useTranslation();
 
   const submit = async () => {
     if (!name.trim() || !folder.trim()) return;
@@ -277,7 +293,7 @@ function CreateLibraryForm({ onCreated, onCancel }: { onCreated: () => void; onC
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Library name"
+          placeholder={t("settings.libs.name")}
           className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none placeholder:text-white/30"
         />
         <select
@@ -292,13 +308,12 @@ function CreateLibraryForm({ onCreated, onCancel }: { onCreated: () => void; onC
         <input
           value={folder}
           onChange={(e) => setFolder(e.target.value)}
-          placeholder="Folder path (e.g. /media/movies)"
+          placeholder={t("settings.libs.folderPath")}
           className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-mono outline-none placeholder:text-white/30"
         />
         <button
           onClick={() => setBrowsingFolder(true)}
           className="inline-flex items-center gap-1 rounded-xl border border-white/10 px-3 py-2 text-xs hover:bg-white/10"
-          title="Browse folders"
         >
           <FolderOpen size={14} />
         </button>
@@ -309,10 +324,10 @@ function CreateLibraryForm({ onCreated, onCancel }: { onCreated: () => void; onC
           disabled={submitting || !name.trim() || !folder.trim()}
           className="rounded-full bg-white px-4 py-2 text-xs font-medium text-black disabled:opacity-50"
         >
-          {submitting ? "Creating…" : "Create"}
+          {submitting ? t("settings.libs.creating") : t("settings.libs.create")}
         </button>
         <button onClick={onCancel} className="rounded-full border border-white/10 px-4 py-2 text-xs">
-          Cancel
+          {t("action.cancel")}
         </button>
       </div>
 
@@ -332,39 +347,30 @@ function CreateLibraryForm({ onCreated, onCancel }: { onCreated: () => void; onC
 // ── Library edit modal ───────────────────────────────────────────────────────
 
 function LibraryEditModal({ lib, onClose, onSaved }: { lib: LibraryType; onClose: () => void; onSaved: () => void }) {
-  const [tab, setTab] = useState<"folders" | "extensions">("folders");
   const [folders, setFolders] = useState<LibraryFolder[]>(lib.folders ?? []);
   const [newPath, setNewPath] = useState("");
-  const [extensions, setExtensions] = useState<string[]>(lib.allowedExtensions);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [browsingFolder, setBrowsingFolder] = useState(false);
+  const t = useTranslation();
 
   const addFolder = async () => {
     if (!newPath.trim()) return;
+    setError(null);
     try {
       await api.post(`/libraries/${lib.id}/folders`, { path: newPath.trim() });
       setFolders((prev) => [...prev, { id: crypto.randomUUID(), path: newPath.trim(), isActive: true }]);
       setNewPath("");
       onSaved();
-    } catch { setError("Failed to add folder."); }
+    } catch { setError(t("settings.libs.failedAdd")); }
   };
 
   const removeFolder = async (folderId: string) => {
+    setError(null);
     try {
       await api.delete(`/libraries/${lib.id}/folders/${folderId}`);
       setFolders((prev) => prev.filter((f) => f.id !== folderId));
       onSaved();
-    } catch { setError("Failed to remove folder."); }
-  };
-
-  const saveExtensions = async () => {
-    setSaving(true); setError(null);
-    try {
-      await api.put(`/libraries/${lib.id}/extensions`, { extensions });
-      onSaved();
-    } catch { setError("Failed to save extensions."); }
-    finally { setSaving(false); }
+    } catch { setError(t("settings.libs.failedRemove")); }
   };
 
   return (
@@ -385,89 +391,49 @@ function LibraryEditModal({ lib, onClose, onSaved }: { lib: LibraryType; onClose
           <button onClick={onClose} className="rounded-full p-1.5 hover:bg-white/10"><X size={16} /></button>
         </div>
 
-        <div className="mt-4 flex gap-1 rounded-xl border border-white/[0.06] bg-white/[0.02] p-1">
-          {(["folders", "extensions"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={"flex-1 rounded-lg py-1.5 text-xs font-medium transition-all capitalize " + (tab === t ? "bg-white/10 text-white" : "text-mythra-text-muted hover:text-white")}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-
         {error && (
           <div className="mt-3 flex items-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-300">
             <AlertTriangle size={13} /> {error}
           </div>
         )}
 
-        {tab === "folders" && (
-          <div className="mt-4 space-y-2">
-            {folders.length === 0 && <p className="text-xs text-mythra-text-muted">No folders configured yet.</p>}
-            {folders.map((f) => (
-              <div key={f.id} className="flex items-center gap-2 rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2.5">
-                <FolderOpen size={13} className="shrink-0 text-mythra-text-muted" />
-                <span className="flex-1 truncate text-xs font-mono">{f.path}</span>
-                <span className={`text-[10px] ${f.isActive ? "text-emerald-400" : "text-rose-400"}`}>{f.isActive ? "active" : "inactive"}</span>
-                <button onClick={() => removeFolder(f.id)} className="ml-1 rounded-full p-1 hover:bg-rose-500/10 text-rose-400">
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-            <div className="flex gap-2 pt-1">
-              <input
-                value={newPath}
-                onChange={(e) => setNewPath(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addFolder()}
-                placeholder="/path/to/folder"
-                className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-mono outline-none placeholder:text-white/20"
-              />
-              <button
-                onClick={() => setBrowsingFolder(true)}
-                className="rounded-xl border border-white/10 px-3 py-2 text-xs hover:bg-white/10"
-                title="Browse"
-              >
-                <FolderOpen size={13} />
-              </button>
-              <button
-                onClick={addFolder}
-                disabled={!newPath.trim()}
-                className="rounded-xl bg-white/10 px-3 py-2 text-xs hover:bg-white/15 disabled:opacity-40"
-              >
-                Add
+        <div className="mt-4 space-y-2">
+          {folders.length === 0 && <p className="text-xs text-mythra-text-muted">{t("settings.libs.noFolders")}</p>}
+          {folders.map((f) => (
+            <div key={f.id} className="flex items-center gap-2 rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2.5">
+              <FolderOpen size={13} className="shrink-0 text-mythra-text-muted" />
+              <span className="flex-1 truncate text-xs font-mono">{f.path}</span>
+              <span className={`text-[10px] ${f.isActive ? "text-emerald-400" : "text-rose-400"}`}>
+                {f.isActive ? "active" : "inactive"}
+              </span>
+              <button onClick={() => removeFolder(f.id)} className="ml-1 rounded-full p-1 hover:bg-rose-500/10 text-rose-400">
+                <X size={12} />
               </button>
             </div>
-          </div>
-        )}
-
-        {tab === "extensions" && (
-          <div className="mt-4">
-            <p className="mb-2 text-xs text-mythra-text-muted">
-              Custom file extensions for this library. Leave empty to use defaults for {lib.kind}.
-            </p>
-            <ExtensionsEditor
-              value={extensions}
-              onChange={setExtensions}
-              placeholder={lib.effectiveExtensions.slice(0, 6).join(", ") + "…"}
+          ))}
+          <div className="flex gap-2 pt-1">
+            <input
+              value={newPath}
+              onChange={(e) => setNewPath(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addFolder()}
+              placeholder="/path/to/folder"
+              className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-mono outline-none placeholder:text-white/20"
             />
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                onClick={saveExtensions}
-                disabled={saving}
-                className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-mythra-purple to-mythra-blue px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
-              >
-                <Check size={12} /> {saving ? "Saving…" : "Save extensions"}
-              </button>
-              {extensions.length > 0 && (
-                <button onClick={() => setExtensions([])} className="text-xs text-mythra-text-muted hover:text-white">
-                  Reset to defaults
-                </button>
-              )}
-            </div>
+            <button
+              onClick={() => setBrowsingFolder(true)}
+              className="rounded-xl border border-white/10 px-3 py-2 text-xs hover:bg-white/10"
+            >
+              <FolderOpen size={13} />
+            </button>
+            <button
+              onClick={addFolder}
+              disabled={!newPath.trim()}
+              className="rounded-xl bg-white/10 px-3 py-2 text-xs hover:bg-white/15 disabled:opacity-40"
+            >
+              {t("settings.libs.addFolder")}
+            </button>
           </div>
-        )}
+        </div>
       </motion.div>
 
       <AnimatePresence>
@@ -485,40 +451,6 @@ function LibraryEditModal({ lib, onClose, onSaved }: { lib: LibraryType; onClose
 
 // ── Extensions tag-input editor ──────────────────────────────────────────────
 
-function ExtensionsEditor({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
-  const [input, setInput] = useState("");
-  const add = () => {
-    const raw = input.trim().toLowerCase();
-    if (!raw) return;
-    const ext = raw.startsWith(".") ? raw : "." + raw;
-    if (!value.includes(ext)) onChange([...value, ext]);
-    setInput("");
-  };
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-      <div className="flex flex-wrap gap-1.5 min-h-[24px]">
-        {value.map((ext) => (
-          <span key={ext} className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.06] px-2.5 py-0.5 text-xs font-mono">
-            {ext}
-            <button onClick={() => onChange(value.filter((e) => e !== ext))} className="text-mythra-text-muted hover:text-white"><X size={10} /></button>
-          </span>
-        ))}
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " " || e.key === ",") { e.preventDefault(); add(); }
-            if (e.key === "Backspace" && !input && value.length > 0) onChange(value.slice(0, -1));
-          }}
-          onBlur={add}
-          placeholder={value.length === 0 ? (placeholder ?? "Add extensions…") : ""}
-          className="min-w-[140px] flex-1 bg-transparent text-xs font-mono outline-none placeholder:text-white/20"
-        />
-      </div>
-      <p className="mt-1.5 text-[10px] text-mythra-text-muted">Press Enter or Space to add. Backspace to remove last.</p>
-    </div>
-  );
-}
 
 // ════════════════════════════════════════════════════════════
 // PROFILES SECTION
@@ -532,6 +464,7 @@ function ProfilesSection({ user }: { user: { id?: string; profiles?: Profile[] }
   const [newName, setNewName] = useState("");
   const [isKid, setIsKid] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const t = useTranslation();
 
   const profiles = user?.profiles ?? [];
 
@@ -563,14 +496,14 @@ function ProfilesSection({ user }: { user: { id?: string; profiles?: Profile[] }
     <div className="rounded-3xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Profiles</h2>
-          <p className="text-sm text-mythra-text-muted mt-1">Separate watch histories and preferences per person.</p>
+          <h2 className="text-lg font-semibold">{t("settings.profiles.title")}</h2>
+          <p className="text-sm text-mythra-text-muted mt-1">{t("settings.profiles.subtitle")}</p>
         </div>
         <button
           onClick={() => setCreating(true)}
           className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-mythra-purple to-mythra-blue px-4 py-2 text-xs font-medium text-white"
         >
-          <Plus size={14} /> New profile
+          <Plus size={14} /> {t("settings.profiles.newProfile")}
         </button>
       </div>
 
@@ -590,20 +523,20 @@ function ProfilesSection({ user }: { user: { id?: string; profiles?: Profile[] }
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Profile name"
+                placeholder={t("settings.profiles.title")}
                 className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none placeholder:text-white/30"
               />
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" checked={isKid} onChange={(e) => setIsKid(e.target.checked)} className="accent-purple-500" />
-                Kid-friendly profile
+                {t("settings.profiles.kidFriendly")}
               </label>
             </div>
             <div className="mt-3 flex gap-2">
               <button onClick={createProfile} disabled={!newName.trim()} className="rounded-full bg-white px-4 py-2 text-xs font-medium text-black disabled:opacity-50">
-                Create
+                {t("settings.libs.create")}
               </button>
               <button onClick={() => setCreating(false)} className="rounded-full border border-white/10 px-4 py-2 text-xs">
-                Cancel
+                {t("action.cancel")}
               </button>
             </div>
           </motion.div>
@@ -611,7 +544,7 @@ function ProfilesSection({ user }: { user: { id?: string; profiles?: Profile[] }
       </AnimatePresence>
 
       {profiles.length === 0 && !creating && (
-        <p className="text-sm text-mythra-text-muted">No profiles yet.</p>
+        <p className="text-sm text-mythra-text-muted">{t("settings.profiles.noProfiles")}</p>
       )}
 
       <ul className="space-y-3">
@@ -622,7 +555,7 @@ function ProfilesSection({ user }: { user: { id?: string; profiles?: Profile[] }
             </div>
             <div className="flex-1">
               <p className="text-sm font-medium">{p.name}</p>
-              <p className="text-xs text-mythra-text-muted">{p.isKidFriendly ? "Kid-friendly" : "Standard"}</p>
+              <p className="text-xs text-mythra-text-muted">{p.isKidFriendly ? t("settings.profiles.kidLabel") : t("settings.profiles.standard")}</p>
             </div>
             <button
               onClick={() => deleteProfile(p.id)}
@@ -657,6 +590,7 @@ function AddonsSection() {
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const qc = useQueryClient();
+  const t = useTranslation();
 
   const addons = useQuery({
     queryKey: ["addons"],
@@ -714,13 +648,13 @@ function AddonsSection() {
     <div className="rounded-3xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Addons</h2>
+          <h2 className="text-lg font-semibold">{t("settings.nav.addons")}</h2>
           <p className="text-sm text-mythra-text-muted mt-1">
             Import and export reusable media source configurations.
           </p>
         </div>
         <label className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-gradient-to-r from-mythra-purple to-mythra-blue px-4 py-2 text-xs font-medium text-white">
-          <Upload size={14} /> {importing ? "Importing…" : "Import addon"}
+          <Upload size={14} /> {importing ? t("action.importing") : t("action.import") + " addon"}
           <input type="file" accept=".json,.mythra-addon.json" onChange={handleFileImport} className="hidden" disabled={importing} />
         </label>
       </div>
@@ -731,7 +665,7 @@ function AddonsSection() {
         </div>
       )}
 
-      {addons.isLoading && <p className="text-sm text-mythra-text-muted">Loading addons…</p>}
+      {addons.isLoading && <p className="text-sm text-mythra-text-muted">{t("common.loading")}</p>}
 
       {!addons.isLoading && (addons.data?.length ?? 0) === 0 && (
         <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center">
@@ -796,6 +730,7 @@ function LanguageSection() {
   const [showOriginal, setShowOriginal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const { locale, setLocale } = useLocaleStore();
 
   useEffect(() => {
     if (!profileId) return;
@@ -823,7 +758,7 @@ function LanguageSection() {
     } finally { setSaving(false); }
   };
 
-  const LANGS = [
+  const MEDIA_LANGS = [
     { code: "", label: "System default" },
     { code: "en", label: "English" },
     { code: "pt-BR", label: "Portuguese (Brazil)" },
@@ -840,15 +775,45 @@ function LanguageSection() {
     <div>
       <label className="mb-1 block text-xs text-mythra-text-muted">{label}</label>
       <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#0c0e1a] px-3 py-2 text-sm">
-        {LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
+        {MEDIA_LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
       </select>
     </div>
   );
 
   return (
     <div className="rounded-3xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur space-y-6">
+      {/* App interface language */}
       <div>
-        <h2 className="text-lg font-semibold">Language Preferences</h2>
+        <h2 className="text-lg font-semibold">Interface Language</h2>
+        <p className="mt-1 text-sm text-mythra-text-muted">Language used throughout the Mythra interface.</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+        {LOCALES.map((loc) => (
+          <button
+            key={loc.code}
+            onClick={() => setLocale(loc.code as Locale)}
+            className={
+              "flex flex-col items-center gap-1.5 rounded-2xl border p-3 text-sm font-medium transition-all " +
+              (locale === loc.code
+                ? "border-mythra-purple/50 bg-mythra-purple/10 text-white"
+                : "border-white/[0.05] bg-white/[0.02] text-mythra-text-muted hover:border-white/10 hover:text-white")
+            }
+          >
+            <span className="text-xl">{loc.flag}</span>
+            <span className="text-xs">{loc.label}</span>
+            {locale === loc.code && (
+              <span className="h-1 w-1 rounded-full bg-mythra-purple" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div className="h-px bg-white/[0.06]" />
+
+      {/* Content language preferences (server-side) */}
+      <div>
+        <h2 className="text-lg font-semibold">Content Language Preferences</h2>
         <p className="mt-1 text-sm text-mythra-text-muted">Control metadata display language and default audio/subtitle tracks.</p>
       </div>
 
@@ -887,6 +852,7 @@ function PlaybackSection() {
   const [speed, setSpeed] = useState("1");
   const [autoSubtitles, setAutoSubtitles] = useState(true);
   const [saved, setSaved] = useState(false);
+  const t = useTranslation();
 
   const save = () => {
     // Persist to localStorage (backend endpoint can be wired later)
@@ -910,13 +876,13 @@ function PlaybackSection() {
   return (
     <div className="rounded-3xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Playback Preferences</h2>
-        <p className="mt-1 text-sm text-mythra-text-muted">Set default streaming quality and behavior.</p>
+        <h2 className="text-lg font-semibold">{t("settings.playback.title")}</h2>
+        <p className="mt-1 text-sm text-mythra-text-muted">{t("settings.playback.subtitle")}</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-xs text-mythra-text-muted">Default quality</label>
+          <label className="mb-1 block text-xs text-mythra-text-muted">{t("settings.playback.quality")}</label>
           <select value={quality} onChange={(e) => setQuality(e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#0c0e1a] px-3 py-2 text-sm">
             <option value="auto">Auto (recommended)</option>
             <option value="4k">4K (2160p)</option>
@@ -926,7 +892,7 @@ function PlaybackSection() {
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-mythra-text-muted">Default playback speed</label>
+          <label className="mb-1 block text-xs text-mythra-text-muted">{t("settings.playback.speed")}</label>
           <select value={speed} onChange={(e) => setSpeed(e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#0c0e1a] px-3 py-2 text-sm">
             {["0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"].map((s) => (
               <option key={s} value={s}>{s}×</option>
@@ -935,7 +901,7 @@ function PlaybackSection() {
         </div>
         <div className="flex items-center gap-3">
           <input id="auto-sub" type="checkbox" checked={autoSubtitles} onChange={(e) => setAutoSubtitles(e.target.checked)} className="h-4 w-4 rounded accent-purple-500" />
-          <label htmlFor="auto-sub" className="text-sm text-mythra-text-soft cursor-pointer">Enable subtitles automatically</label>
+          <label htmlFor="auto-sub" className="text-sm text-mythra-text-soft cursor-pointer">{t("settings.playback.autoSubs")}</label>
         </div>
       </div>
 
@@ -943,7 +909,7 @@ function PlaybackSection() {
         onClick={save}
         className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-mythra-purple to-mythra-blue px-5 py-2 text-sm font-medium text-white"
       >
-        {saved ? <><Check size={14} /> Saved!</> : "Save preferences"}
+        {saved ? <><Check size={14} /> Saved!</> : t("action.save")}
       </button>
     </div>
   );
@@ -954,17 +920,18 @@ function PlaybackSection() {
 // ════════════════════════════════════════════════════════════
 
 function MetadataSection() {
+  const t = useTranslation();
   return (
     <div className="rounded-3xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Metadata Providers</h2>
-        <p className="mt-1 text-sm text-mythra-text-muted">External APIs used to enrich your library with posters, ratings, and descriptions.</p>
+        <h2 className="text-lg font-semibold">{t("settings.metadata.title")}</h2>
+        <p className="mt-1 text-sm text-mythra-text-muted">{t("settings.metadata.subtitle")}</p>
       </div>
       {[
-        { name: "TMDB", desc: "Movies & TV shows", env: "TMDB_API_KEY", badge: "Video" },
-        { name: "AniList", desc: "Anime & Manga", env: "ANILIST_TOKEN", badge: "Anime / Manga" },
-        { name: "Google Books", desc: "Books & eBooks", env: "GOOGLE_BOOKS_API_KEY", badge: "Book" },
-        { name: "MusicBrainz", desc: "Music & Audiobooks", env: "— (no key needed)", badge: "Audio" },
+        { name: "TMDB", desc: "Movies & TV shows", env: "Metadata__TmdbApiKey", badge: "Video" },
+        { name: "AniList", desc: "Anime & Manga", env: "— (no key needed)", badge: "Anime / Manga" },
+        { name: "Open Library", desc: "Books & eBooks", env: "— (no key needed)", badge: "Book" },
+        { name: "Spotify", desc: "Music & Audiobooks", env: "Metadata__SpotifyClientId", badge: "Audio" },
       ].map((p) => (
         <div key={p.name} className="flex items-center gap-3 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4">
           <div className="flex-1">
@@ -976,8 +943,75 @@ function MetadataSection() {
         </div>
       ))}
       <p className="text-xs text-mythra-text-muted">
-        Configure API keys via environment variables in your <code className="rounded bg-white/10 px-1">docker-compose.yml</code> or <code className="rounded bg-white/10 px-1">.env</code> file.
+        {t("settings.metadata.hint")}
       </p>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// ADULT CONTENT SECTION
+// ════════════════════════════════════════════════════════════
+
+function AdultContentSection() {
+  const { showAdultContent, setShowAdultContent, isHydrated } = useProfilePrefs();
+  const t = useTranslation();
+  const mounted = isHydrated;
+
+  return (
+    <div className="rounded-3xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <ShieldAlert size={18} className="text-red-400" />
+          {t("settings.nav.adult")}
+        </h2>
+        <p className="mt-1 text-sm text-mythra-text-muted">
+          {t("adult.subtitle")}
+        </p>
+      </div>
+
+      <div className="flex items-start gap-4 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4">
+        <div className="flex-1">
+          <p className="text-sm font-medium">{t("settings.adult.show")}</p>
+          <p className="mt-0.5 text-xs text-mythra-text-muted">
+            {t("settings.adult.showDesc")}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAdultContent(!showAdultContent)}
+          disabled={!mounted}
+          className={
+            "relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-60 " +
+            (mounted && showAdultContent ? "bg-red-500" : "bg-white/10")
+          }
+          aria-pressed={mounted && showAdultContent}
+        >
+          <span
+            className={
+              "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 " +
+              (mounted && showAdultContent ? "translate-x-5" : "translate-x-0.5")
+            }
+          />
+        </button>
+      </div>
+
+      {mounted && showAdultContent && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          className="overflow-hidden rounded-2xl border border-red-500/20 bg-red-500/[0.05] p-4"
+        >
+          <div className="flex items-start gap-3">
+            <ShieldAlert size={16} className="mt-0.5 shrink-0 text-red-400" />
+            <div>
+              <p className="text-sm font-medium text-red-300">{t("settings.adult.enabled")}</p>
+              <p className="mt-0.5 text-xs text-mythra-text-muted">
+                {t("settings.adult.enabledDesc")}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }
@@ -992,6 +1026,7 @@ function AccountSection({ user, onSignOut }: { user: { email?: string; username?
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const t = useTranslation();
 
   const saveProfile = async () => {
     setSaving(true); setError(null);
@@ -1007,7 +1042,7 @@ function AccountSection({ user, onSignOut }: { user: { email?: string; username?
   return (
     <div className="rounded-3xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Account</h2>
+        <h2 className="text-lg font-semibold">{t("settings.account")}</h2>
         <p className="mt-1 text-sm text-mythra-text-muted">Manage your account details.</p>
       </div>
 
@@ -1019,11 +1054,11 @@ function AccountSection({ user, onSignOut }: { user: { email?: string; username?
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-xs text-mythra-text-muted">Email</label>
+          <label className="mb-1 block text-xs text-mythra-text-muted">{t("settings.account.email")}</label>
           <p className="rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2 text-sm text-mythra-text-soft">{user?.email}</p>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-mythra-text-muted">Username</label>
+          <label className="mb-1 block text-xs text-mythra-text-muted">{t("settings.account.username")}</label>
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -1038,13 +1073,13 @@ function AccountSection({ user, onSignOut }: { user: { email?: string; username?
           disabled={saving || !username.trim()}
           className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-mythra-purple to-mythra-blue px-5 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          {saved ? <><Check size={14} /> Saved!</> : saving ? "Saving…" : "Save changes"}
+          {saved ? <><Check size={14} /> Saved!</> : saving ? t("settings.libs.saving") : t("settings.account.save")}
         </button>
         <button
           onClick={onSignOut}
           className="inline-flex items-center gap-2 rounded-full border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-200 hover:bg-rose-500/20"
         >
-          <Trash2 size={14} /> Sign out
+          <Trash2 size={14} /> {t("settings.account.signOut")}
         </button>
       </div>
     </div>

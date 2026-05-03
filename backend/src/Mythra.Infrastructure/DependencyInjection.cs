@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Mythra.Application.Abstractions.Addons;
 using Mythra.Application.Abstractions.Auth;
 using Mythra.Application.Abstractions.Background;
 using Mythra.Application.Abstractions.Files;
@@ -8,7 +10,7 @@ using Mythra.Application.Abstractions.Metadata;
 using Mythra.Application.Abstractions.Persistence;
 using Mythra.Application.Abstractions.Providers;
 using Mythra.Application.Abstractions.Scanning;
-using Mythra.Infrastructure.Persistence.Repositories;
+using Mythra.Infrastructure.Addons;
 using Mythra.Application.Abstractions.Streaming;
 using Mythra.Application.Abstractions.Time;
 using Mythra.Application.Services.ExternalProviders;
@@ -61,6 +63,8 @@ public static class DependencyInjection
         services.AddScoped<ISyncRoomRepository, SyncRoomRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IAddonRepository, AddonRepository>();
+        services.AddScoped<IPlaylistRepository, PlaylistRepository>();
+        services.AddScoped<IFavoriteRepository, FavoriteRepository>();
 
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IFileSystem, LocalFileSystem>();
@@ -70,35 +74,46 @@ public static class DependencyInjection
         services.AddSingleton<IMediaProbe, FfmpegMediaProbe>();
         services.AddSingleton<ITranscoder, FfmpegTranscoder>();
 
+        var metaOpts = config.GetSection(MetadataOptions.SectionName).Get<MetadataOptions>() ?? new MetadataOptions();
+
         services.AddHttpClient<TmdbMetadataProvider>(c =>
         {
-            var opts = config.GetSection(MetadataOptions.SectionName).Get<MetadataOptions>() ?? new MetadataOptions();
-            c.BaseAddress = new Uri(opts.TmdbBaseUrl);
+            c.BaseAddress = new Uri(metaOpts.TmdbBaseUrl.TrimEnd('/') + "/");
             c.Timeout = TimeSpan.FromSeconds(15);
         });
         services.AddHttpClient<AniListMetadataProvider>(c =>
         {
             c.Timeout = TimeSpan.FromSeconds(15);
         });
-        services.AddHttpClient<MusicBrainzMetadataProvider>(c =>
+        services.AddHttpClient<OpenLibraryMetadataProvider>(c =>
         {
-            var opts = config.GetSection(MetadataOptions.SectionName).Get<MetadataOptions>() ?? new MetadataOptions();
-            c.BaseAddress = new Uri(opts.MusicBrainzBaseUrl);
+            c.BaseAddress = new Uri(metaOpts.OpenLibraryBaseUrl.TrimEnd('/') + "/");
             c.Timeout = TimeSpan.FromSeconds(15);
-            c.DefaultRequestHeaders.UserAgent.ParseAdd(opts.MusicBrainzUserAgent);
+            c.DefaultRequestHeaders.UserAgent.ParseAdd("Mythra/0.1 (https://mythra.local)");
         });
-        services.AddHttpClient<GoogleBooksMetadataProvider>(c =>
+        services.AddHttpClient<CinemetaMetadataProvider>(c =>
         {
-            var opts = config.GetSection(MetadataOptions.SectionName).Get<MetadataOptions>() ?? new MetadataOptions();
-            c.BaseAddress = new Uri(opts.GoogleBooksBaseUrl);
+            c.BaseAddress = new Uri(metaOpts.CinemetaBaseUrl.TrimEnd('/') + "/");
             c.Timeout = TimeSpan.FromSeconds(15);
+            c.DefaultRequestHeaders.UserAgent.ParseAdd("Mythra/0.1 (https://mythra.local)");
         });
 
+        services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<CinemetaMetadataProvider>());
         services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<TmdbMetadataProvider>());
         services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<AniListMetadataProvider>());
-        services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<MusicBrainzMetadataProvider>());
-        services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<GoogleBooksMetadataProvider>());
+        services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<OpenLibraryMetadataProvider>());
+        services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<SpotifyMetadataProvider>());
+        services.AddSingleton<SpotifyMetadataProvider>();
+
+        // Catalog browsing capability — Cinemeta is the primary, AniList augments anime catalogs.
+        services.AddSingleton<ICatalogProvider>(sp => sp.GetRequiredService<CinemetaMetadataProvider>());
+        services.AddSingleton<ICatalogProvider, AniListCatalogProvider>();
+
         services.AddSingleton<IMetadataProviderRegistry, MetadataProviderRegistry>();
+
+        // Named HTTP clients for Spotify OAuth
+        services.AddHttpClient("SpotifyAuth", c => { c.Timeout = TimeSpan.FromSeconds(15); });
+        services.AddHttpClient("SpotifyApi", c => { c.Timeout = TimeSpan.FromSeconds(15); });
 
         // Register each concrete scanner as itself so GeneralLibraryScanner can inject them directly,
         // then forward each as IMediaScanner for the registry's IEnumerable<IMediaScanner>.
@@ -115,6 +130,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IBackgroundJobQueue, ChannelBackgroundJobQueue>();
         services.AddHostedService<BackgroundJobWorker>();
+        services.AddHostedService<LibraryWatcherService>();
 
         // ── External content providers ──────────────────────────────────────────
 
@@ -168,6 +184,28 @@ public static class DependencyInjection
 
         // Orchestrator service (Application layer, needs scoped repo — register as Scoped)
         services.AddScoped<IExternalProviderService, ExternalProviderService>();
+
+        // ── Addon system ────────────────────────────────────────────────────────
+        services.AddMemoryCache();
+
+        // Named HttpClient used by OmdbMetadataProvider instances.
+        services.AddHttpClient("OmdbMetadata", c => { c.Timeout = TimeSpan.FromSeconds(15); });
+
+        // Generic pool for the DLL-loading addon sandbox (AddonHost).
+        services.AddHttpClient("AddonHttpClient", c => { c.Timeout = TimeSpan.FromSeconds(20); });
+
+        services.Configure<AddonOptions>(config.GetSection(AddonOptions.SectionName));
+
+        // IAddonActivator: maps ProviderType strings to live provider instances.
+        services.AddSingleton<IAddonActivator, AddonActivator>();
+
+        // AddonActivationService: activates all Active addons from the DB on startup.
+        services.AddHostedService<AddonActivationService>();
+
+        // AddonHost: DLL-loading host for external .dll addons (advanced use).
+        services.AddSingleton<AddonHost>();
+        services.AddSingleton<IAddonHost>(sp => sp.GetRequiredService<AddonHost>());
+        services.AddHostedService(sp => sp.GetRequiredService<AddonHost>());
 
         return services;
     }

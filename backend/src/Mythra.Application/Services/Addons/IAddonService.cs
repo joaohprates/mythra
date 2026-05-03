@@ -26,6 +26,17 @@ public sealed record AddonExportDto(
     string ProviderConfigJson,
     string SourceChecksum);
 
+/// <summary>
+/// Request body for PATCH /api/v1/addons/{id}/configure.
+/// Secrets are stored encrypted (SecretsJson) and never exported.
+/// Config is non-sensitive and included in .mythra-addon.json exports.
+/// </summary>
+public sealed record ConfigureAddonRequest(
+    /// <summary>Sensitive keys such as "ApiKey". Merged into the addon's SecretsJson.</summary>
+    Dictionary<string, string>? Secrets = null,
+    /// <summary>Non-sensitive config such as cache TTLs. Merged into ProviderConfigJson.</summary>
+    Dictionary<string, string>? Config = null);
+
 public interface IAddonService
 {
     Task<Result<IReadOnlyList<AddonDto>>> ListAsync(Guid userId, CancellationToken ct = default);
@@ -34,4 +45,11 @@ public interface IAddonService
     Task<Result<AddonExportDto>> ExportAsync(Guid userId, Guid addonId, CancellationToken ct = default);
     Task<Result<AddonDto>> ToggleAsync(Guid userId, Guid addonId, CancellationToken ct = default);
     Task<Result> DeleteAsync(Guid userId, Guid addonId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Saves secrets and/or config values. If all required secrets become available
+    /// (determined by the activator) the addon is moved to Active and the provider
+    /// is registered immediately.
+    /// </summary>
+    Task<Result<AddonDto>> ConfigureAsync(Guid userId, Guid addonId, ConfigureAddonRequest req, CancellationToken ct = default);
 }

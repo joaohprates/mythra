@@ -38,6 +38,7 @@ public sealed class AniListMetadataProvider(
                       bannerImage
                       averageScore
                       genres
+                      isAdult
                     }
                   }
                 }
@@ -77,7 +78,7 @@ public sealed class AniListMetadataProvider(
                     description(asHtml: false)
                     startDate { year month day }
                     coverImage { extraLarge } bannerImage
-                    averageScore genres
+                    averageScore genres isAdult
                   }
                 }
                 """,
@@ -121,6 +122,11 @@ public sealed class AniListMetadataProvider(
             ? gs.EnumerateArray().Select(g => g.GetString() ?? "").Where(s => !string.IsNullOrEmpty(s)).ToList()
             : [];
 
+        var isAdult = m.TryGetProperty("isAdult", out var ia) && ia.ValueKind == JsonValueKind.True;
+        // Also detect adult content from genres
+        if (!isAdult && genres.Any(g => g is "Hentai" or "Ecchi" or "Adult"))
+            isAdult = true;
+
         var providerIds = new Dictionary<string, string> { ["anilist"] = m.GetProperty("id").GetInt32().ToString() };
         if (m.TryGetProperty("idMal", out var mal) && mal.ValueKind == JsonValueKind.Number)
             providerIds["mal"] = mal.GetInt32().ToString();
@@ -135,6 +141,7 @@ public sealed class AniListMetadataProvider(
             BackdropUrl: banner,
             Rating: rating,
             Genres: genres,
-            ProviderIds: providerIds);
+            ProviderIds: providerIds,
+            IsAdult: isAdult);
     }
 }

@@ -39,7 +39,10 @@ api.interceptors.response.use(
     const original = error.config as (typeof error.config & { __retry?: boolean }) | undefined;
     const refresh = tokenStore?.getRefreshToken();
 
-    if (status === 401 && refresh && original && !original.__retry) {
+    // Don't attempt refresh for auth endpoints themselves
+    const isAuthEndpoint = original?.url?.includes("/auth/");
+
+    if (status === 401 && refresh && original && !original.__retry && !isAuthEndpoint) {
       original.__retry = true;
       try {
         const newToken = await (refreshing ??= refreshToken(refresh).finally(() => (refreshing = null)));
@@ -50,6 +53,12 @@ api.interceptors.response.use(
         if (typeof window !== "undefined") window.location.href = "/login";
         return Promise.reject(error);
       }
+    }
+
+    // For 5xx errors, attach a human-readable message
+    if (status && status >= 500) {
+      (error as AxiosError & { userMessage?: string }).userMessage =
+        "Server error. Please try again in a moment.";
     }
 
     return Promise.reject(error);

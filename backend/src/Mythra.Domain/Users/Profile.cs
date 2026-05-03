@@ -28,6 +28,9 @@ public sealed class Profile : Entity
     /// <summary>When true, always show the original title instead of the localised one.</summary>
     public bool ShowOriginalTitle { get; set; } = false;
 
+    /// <summary>When true, adult (+18) content is visible throughout the application for this profile.</summary>
+    public bool ShowAdultContent { get; set; } = false;
+
     private Profile() { }
 
     public Profile(Guid userId, string name)
@@ -56,6 +59,12 @@ public sealed class Profile : Entity
         if (subtitleLanguage is not null) PreferredSubtitleLanguage = subtitleLanguage;
         if (audioLanguage    is not null) PreferredAudioLanguage    = audioLanguage;
         if (showOriginalTitle.HasValue)   ShowOriginalTitle          = showOriginalTitle.Value;
+        Touch();
+    }
+
+    public void UpdatePreferences(bool? showAdultContent)
+    {
+        if (showAdultContent.HasValue) ShowAdultContent = showAdultContent.Value;
         Touch();
     }
 }

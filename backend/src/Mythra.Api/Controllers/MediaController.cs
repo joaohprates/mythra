@@ -23,6 +23,7 @@ public sealed class MediaController(IMediaService media) : ControllerBase
         [FromQuery] int take = 50,
         [FromQuery] string orderBy = "title",
         [FromQuery] string? ids = null,
+        [FromQuery] bool? isAdult = null,
         CancellationToken ct = default)
     {
         IReadOnlyList<Guid>? parsedIds = null;
@@ -34,7 +35,7 @@ public sealed class MediaController(IMediaService media) : ControllerBase
                            .Select(g => g!.Value)
                            .ToList();
         }
-        var query = new MediaQuery(libraryId, kind, search, genre, year, skip, take, orderBy, parsedIds);
+        var query = new MediaQuery(libraryId, kind, search, genre, year, skip, take, orderBy, parsedIds, isAdult);
         var result = await media.ListAsync(query, ct);
         return result.ToActionResult();
     }
@@ -56,4 +57,9 @@ public sealed class MediaController(IMediaService media) : ControllerBase
     [HttpGet("genres")]
     public async Task<IActionResult> Genres([FromQuery] MediaKind? kind, CancellationToken ct) =>
         (await media.ListGenresAsync(kind, ct)).ToActionResult();
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct) =>
+        (await media.DeleteAsync(id, ct)).ToActionResult();
 }

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <!-- Produce a self-contained addon folder so the host can load all dependencies -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- Avoid shipping Mythra.Addons.Contracts — it must be the host's copy -->
+    <ExcludeAssets>runtime</ExcludeAssets>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Mythra.Addons.Contracts is the ONLY Mythra dependency.
+      In production this would be a NuGet package reference.
+      ExcludeAssets=runtime prevents it from being copied to the output
+      so the host's ALC resolution falls back to the host's version.
+    -->
+    <ProjectReference Include="..\..\src\Mythra.Addons.Contracts\Mythra.Addons.Contracts.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

@@ -14,6 +14,13 @@ public sealed class PlaybackProgressRepository(MythraDbContext db) : EfRepositor
                  .OrderByDescending(p => p.LastWatchedAt)
                  .Take(Math.Clamp(take, 1, 100))
                  .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<PlaybackProgress>> GetAllForProfileAsync(Guid profileId, DateTimeOffset? since = null, CancellationToken ct = default)
+    {
+        var q = Set.Where(p => p.ProfileId == profileId);
+        if (since.HasValue) q = q.Where(p => p.LastWatchedAt >= since.Value);
+        return await q.OrderByDescending(p => p.LastWatchedAt).ToListAsync(ct);
+    }
 }
 
 public sealed class ReadingProgressRepository(MythraDbContext db) : EfRepository<ReadingProgress>(db), IReadingProgressRepository
@@ -26,6 +33,13 @@ public sealed class ReadingProgressRepository(MythraDbContext db) : EfRepository
                  .OrderByDescending(r => r.LastReadAt)
                  .Take(Math.Clamp(take, 1, 100))
                  .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<ReadingProgress>> GetAllForProfileAsync(Guid profileId, DateTimeOffset? since = null, CancellationToken ct = default)
+    {
+        var q = Set.Where(r => r.ProfileId == profileId);
+        if (since.HasValue) q = q.Where(r => r.LastReadAt >= since.Value);
+        return await q.OrderByDescending(r => r.LastReadAt).ToListAsync(ct);
+    }
 }
 
 public sealed class BookmarkRepository(MythraDbContext db) : EfRepository<Bookmark>(db), IBookmarkRepository

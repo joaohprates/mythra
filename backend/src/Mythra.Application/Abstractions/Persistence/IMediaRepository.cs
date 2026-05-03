@@ -15,7 +15,8 @@ public sealed record MediaQuery(
     int Skip = 0,
     int Take = 50,
     string OrderBy = "title",
-    IReadOnlyList<Guid>? Ids = null);
+    IReadOnlyList<Guid>? Ids = null,
+    bool? IsAdult = null);
 
 public interface IMediaItemRepository : IRepository<MediaItem>
 {
@@ -38,6 +39,7 @@ public interface IVideoRepository : IRepository<VideoItem>
 public interface IMangaRepository : IRepository<MangaItem>
 {
     Task<MangaItem?> GetByIdWithChaptersAsync(Guid id, CancellationToken ct = default);
+    Task<MangaItem?> GetByRootPathAsync(string rootPath, CancellationToken ct = default);
     Task<MangaChapter?> GetChapterAsync(Guid chapterId, CancellationToken ct = default);
 }
 

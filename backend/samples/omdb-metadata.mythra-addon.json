@@ -1,0 +1,10 @@
+{
+  "name": "OMDb / IMDb Metadata",
+  "description": "Fetches movie and series metadata from the OMDb API, which is powered by IMDb data. Returns IMDb ratings, genres, awards, and full plot. ProviderId returned is the IMDb ID (e.g. tt0133093).",
+  "iconUrl": null,
+  "kind": "MetadataProvider",
+  "targetMediaKind": "Video",
+  "providerType": "omdb",
+  "providerConfigJson": "{\"SearchCacheTtlMinutes\":\"60\",\"DetailCacheTtlHours\":\"24\"}",
+  "sourceChecksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

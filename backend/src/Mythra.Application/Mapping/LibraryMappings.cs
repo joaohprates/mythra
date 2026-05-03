@@ -15,8 +15,7 @@ public static class LibraryMappings
         l.AutoRefreshMetadata,
         l.LastScannedAt,
         l.Folders.Count,
-        itemCount,
-        l.AllowedExtensions.AsReadOnly());
+        itemCount);
 
     public static LibraryDetailDto ToDetail(this Library l) => new(
         l.Id,
@@ -29,7 +28,6 @@ public static class LibraryMappings
         l.LastScannedAt,
         l.PreferredLanguage,
         l.PreferredMetadataProvider,
-        l.AllowedExtensions.AsReadOnly(),
         l.GetEffectiveExtensions(),
         l.Folders.Select(f => new LibraryFolderDto(f.Id, f.Path, f.IsActive, f.LastScannedAt)).ToList());
 }

@@ -6,9 +6,11 @@ using Mythra.Application.Services.Discover;
 using Mythra.Application.Services.Libraries;
 using Mythra.Application.Services.Media;
 using Mythra.Application.Services.Notifications;
+using Mythra.Application.Services.Playlists;
 using Mythra.Application.Services.Progress;
 using Mythra.Application.Services.Scanning;
 using Mythra.Application.Services.Search;
+using Mythra.Application.Services.Statistics;
 using Mythra.Application.Services.Streaming;
 using Mythra.Application.Services.Recommendations;
 using Mythra.Application.Services.SyncPlay;
@@ -35,6 +37,8 @@ public static class DependencyInjection
         services.AddScoped<IRecommendationService, RecommendationService>();
         services.AddScoped<IMetadataEnrichmentService, MetadataEnrichmentService>();
         services.AddScoped<IAddonService, AddonService>();
+        services.AddScoped<IPlaylistService, PlaylistService>();
+        services.AddScoped<IStatisticsService, StatisticsService>();
 
         return services;
     }
