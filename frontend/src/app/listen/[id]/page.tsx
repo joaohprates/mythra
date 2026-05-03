@@ -38,13 +38,13 @@ export default function ListenPage() {
           onClick={() => router.back()}
           className="mb-6 inline-flex items-center gap-2 text-sm text-mythra-text-muted hover:text-white"
         >
-          <ChevronLeft size={16} /> Back
+          <ChevronLeft size={16} /> Voltar
         </motion.button>
 
         {detail.data ? (
           <AudioPlayer audio={detail.data} />
         ) : (
-          <div className="grid h-[60vh] place-items-center text-mythra-text-soft">Loading…</div>
+          <div className="grid h-[60vh] place-items-center text-mythra-text-soft">Carregando…</div>
         )}
       </PageScaffold>
     </>

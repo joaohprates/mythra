@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Mythra.Domain.Libraries;
 
@@ -18,18 +17,6 @@ public sealed class LibraryConfiguration : IEntityTypeConfiguration<Library>
         b.Property(l => l.PreferredMetadataProvider).HasMaxLength(64);
         b.Property(l => l.Kind).HasConversion<int>();
         b.Property(l => l.IsSystem).HasDefaultValue(false);
-        // Store AllowedExtensions as a semicolon-delimited string (SQLite compatible)
-        b.Property(l => l.AllowedExtensions)
-            .HasConversion(
-                v => string.Join(';', v),
-                v => string.IsNullOrEmpty(v)
-                    ? new List<string>()
-                    : v.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList(),
-                new ValueComparer<List<string>>(
-                    (a, b) => a != null && b != null && a.SequenceEqual(b),
-                    c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
-                    c => c.ToList()))
-            .HasDefaultValue(new List<string>());
         b.HasMany(l => l.Folders).WithOne().HasForeignKey(f => f.LibraryId).OnDelete(DeleteBehavior.Cascade);
         b.Ignore(l => l.DomainEvents);
     }

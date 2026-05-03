@@ -13,6 +13,5 @@ public interface ILibraryService
     Task<Result<LibraryDetailDto>> AddFolderAsync(Guid id, AddFolderRequest req, CancellationToken ct = default);
     Task<Result<LibraryDetailDto>> UpdateFolderAsync(Guid id, Guid folderId, UpdateFolderRequest req, CancellationToken ct = default);
     Task<Result> RemoveFolderAsync(Guid id, Guid folderId, CancellationToken ct = default);
-    Task<Result<LibraryDetailDto>> UpdateExtensionsAsync(Guid id, UpdateExtensionsRequest req, CancellationToken ct = default);
     Task<Result<Guid>> EnqueueScanAsync(Guid id, CancellationToken ct = default);
 }

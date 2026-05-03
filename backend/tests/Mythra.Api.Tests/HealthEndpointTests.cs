@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -36,6 +37,15 @@ public class HealthEndpointTests : IClassFixture<MythraTestFactory>
 
 public sealed class MythraTestFactory : WebApplicationFactory<Program>
 {
+    // Open the connection at construction time so it persists for the lifetime of the factory
+    private readonly SqliteConnection _conn;
+
+    public MythraTestFactory()
+    {
+        _conn = new SqliteConnection("DataSource=:memory:");
+        _conn.Open();
+    }
+
     protected override IHost CreateHost(IHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -46,9 +56,19 @@ public sealed class MythraTestFactory : WebApplicationFactory<Program>
     {
         builder.ConfigureServices(services =>
         {
-            var dbContextOptions = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<MythraDbContext>));
+            // Swap the registered SQLite connection string with our in-memory one
+            var dbContextOptions = services.SingleOrDefault(d =>
+                d.ServiceType == typeof(DbContextOptions<MythraDbContext>));
             if (dbContextOptions is not null) services.Remove(dbContextOptions);
-            services.AddDbContext<MythraDbContext>(opt => opt.UseInMemoryDatabase($"mythra-test-{Guid.NewGuid()}"));
+
+            // EnsureDatabaseAsync in Program.cs runs Migrate() automatically on startup
+            services.AddDbContext<MythraDbContext>(opt => opt.UseSqlite(_conn));
         });
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing) _conn.Dispose();
     }
 }

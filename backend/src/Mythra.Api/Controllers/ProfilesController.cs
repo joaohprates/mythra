@@ -19,6 +19,10 @@ public sealed record ProfileLanguageDto(
     string? PreferredAudioLanguage,
     bool ShowOriginalTitle);
 
+public sealed record UpdatePreferencesRequest(bool? ShowAdultContent);
+
+public sealed record ProfilePreferencesDto(Guid ProfileId, bool ShowAdultContent);
+
 [ApiController]
 [Route("api/v1/profiles")]
 [Authorize]
@@ -64,5 +68,27 @@ public sealed class ProfilesController(
             profile.PreferredSubtitleLanguage,
             profile.PreferredAudioLanguage,
             profile.ShowOriginalTitle));
+    }
+
+    [HttpGet("{profileId:guid}/preferences")]
+    public async Task<IActionResult> GetPreferences(Guid profileId, CancellationToken ct)
+    {
+        var profile = await profiles.GetByIdAsync(profileId, ct);
+        if (profile is null) return NotFound(new { error = "NotFound", message = "Profile not found." });
+        if (profile.UserId != currentUser.UserId) return Forbid();
+        return Ok(new ProfilePreferencesDto(profile.Id, profile.ShowAdultContent));
+    }
+
+    [HttpPatch("{profileId:guid}/preferences")]
+    public async Task<IActionResult> UpdatePreferences(
+        Guid profileId, [FromBody] UpdatePreferencesRequest req, CancellationToken ct)
+    {
+        var profile = await profiles.GetByIdAsync(profileId, ct);
+        if (profile is null) return NotFound(new { error = "NotFound", message = "Profile not found." });
+        if (profile.UserId != currentUser.UserId) return Forbid();
+
+        profile.UpdatePreferences(req.ShowAdultContent);
+        await uow.SaveChangesAsync(ct);
+        return Ok(new ProfilePreferencesDto(profile.Id, profile.ShowAdultContent));
     }
 }

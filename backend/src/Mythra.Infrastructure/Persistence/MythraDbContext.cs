@@ -9,6 +9,8 @@ using Mythra.Domain.Media.Manga;
 using Mythra.Domain.Media.Video;
 using Mythra.Domain.Addons;
 using Mythra.Domain.Notifications;
+using Mythra.Domain.Favorites;
+using Mythra.Domain.Playlists;
 using Mythra.Domain.Progress;
 using Mythra.Domain.Streaming;
 using Mythra.Domain.SyncPlay;
@@ -53,6 +55,9 @@ public sealed class MythraDbContext(DbContextOptions<MythraDbContext> options) :
 
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Addon> Addons => Set<Addon>();
+    public DbSet<Playlist> Playlists => Set<Playlist>();
+    public DbSet<PlaylistItem> PlaylistItems => Set<PlaylistItem>();
+    public DbSet<FavoriteItem> Favorites => Set<FavoriteItem>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

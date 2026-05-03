@@ -26,6 +26,7 @@ public sealed class AudioLibraryScanner(
         var failed = 0;
         var errors = new List<string>();
         var newItemIds = new List<Guid>();
+        var extensions = AudioExtensions;
 
         foreach (var root in rootPaths)
         {
@@ -35,13 +36,26 @@ public sealed class AudioLibraryScanner(
                 continue;
             }
 
-            foreach (var albumDir in Directory.EnumerateDirectories(root, "*", SearchOption.TopDirectoryOnly))
+            // Collect directories to scan: subdirectories + root itself (for root-level files)
+            var dirsToScan = new List<string>();
+            dirsToScan.AddRange(Directory.EnumerateDirectories(root, "*", SearchOption.TopDirectoryOnly));
+
+            // Check for root-level audio files and treat root as an "album" if found
+            var rootFiles = Directory.EnumerateFiles(root, "*", SearchOption.TopDirectoryOnly)
+                .Where(f => extensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                .ToList();
+            if (rootFiles.Count > 0)
+                dirsToScan.Insert(0, root);
+
+            foreach (var albumDir in dirsToScan)
             {
                 ct.ThrowIfCancellationRequested();
                 try
                 {
-                    var audioFiles = Directory.EnumerateFiles(albumDir, "*", SearchOption.AllDirectories)
-                        .Where(f => AudioExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                    // For root, only get top-level files; for subdirs, get all recursively
+                    var searchOption = albumDir == root ? SearchOption.TopDirectoryOnly : SearchOption.AllDirectories;
+                    var audioFiles = Directory.EnumerateFiles(albumDir, "*", searchOption)
+                        .Where(f => extensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
                         .OrderBy(f => f)
                         .ToList();
                     if (audioFiles.Count == 0) continue;
@@ -49,7 +63,7 @@ public sealed class AudioLibraryScanner(
                     var book = new AudioItem
                     {
                         LibraryId = libraryId,
-                        Title = new DirectoryInfo(albumDir).Name,
+                        Title = albumDir == root ? new DirectoryInfo(root).Name : new DirectoryInfo(albumDir).Name,
                         AudioKind = AudioKind.Audiobook,
                         RootPath = albumDir,
                         LastScannedAt = DateTimeOffset.UtcNow,

@@ -12,8 +12,7 @@ public sealed record LibraryDto(
     bool AutoRefreshMetadata,
     DateTimeOffset? LastScannedAt,
     int FolderCount,
-    int? ItemCount,
-    IReadOnlyList<string> AllowedExtensions);
+    int? ItemCount);
 
 public sealed record LibraryDetailDto(
     Guid Id,
@@ -26,7 +25,6 @@ public sealed record LibraryDetailDto(
     DateTimeOffset? LastScannedAt,
     string? PreferredLanguage,
     string? PreferredMetadataProvider,
-    IReadOnlyList<string> AllowedExtensions,
     IReadOnlyList<string> EffectiveExtensions,
     IReadOnlyList<LibraryFolderDto> Folders);
 
@@ -37,7 +35,6 @@ public sealed record CreateLibraryRequest(
     LibraryKind Kind,
     string? Description,
     IReadOnlyList<string> Folders,
-    IReadOnlyList<string>? AllowedExtensions = null,
     string? PreferredLanguage = null,
     string? PreferredMetadataProvider = null);
 
@@ -47,11 +44,8 @@ public sealed record UpdateLibraryRequest(
     bool? IsEnabled,
     bool? AutoRefreshMetadata,
     string? PreferredLanguage,
-    string? PreferredMetadataProvider,
-    IReadOnlyList<string>? AllowedExtensions = null);
+    string? PreferredMetadataProvider);
 
 public sealed record AddFolderRequest(string Path);
 
 public sealed record UpdateFolderRequest(string? Path, bool? IsActive);
-
-public sealed record UpdateExtensionsRequest(IReadOnlyList<string> Extensions);

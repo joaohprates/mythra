@@ -1,10 +1,11 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight, Layers, Settings } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { MangaItemDetail, MangaReadingDirection } from "@/lib/types";
+import { useTranslation } from "@/store/locale";
 
 interface Props {
   manga: MangaItemDetail;
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function MangaReader({ manga, initialChapterId }: Props) {
+  const t = useTranslation();
   const [direction, setDirection] = useState<MangaReadingDirection>(manga.readingDirection ?? "RightToLeft");
   const [chapterId, setChapterId] = useState(initialChapterId ?? manga.chapters[0]?.id);
   const chapter = manga.chapters.find((c) => c.id === chapterId) ?? manga.chapters[0];
@@ -35,7 +37,68 @@ export function MangaReader({ manga, initialChapterId }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [chapter, direction]);
 
-  if (!chapter) return <div className="grid min-h-screen place-items-center text-mythra-text-soft">No chapters yet.</div>;
+  // ── External-only: no local chapters ──────────────────────────────────────
+  if (manga.isExternal || manga.chapters.length === 0) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-black px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex max-w-sm flex-col items-center gap-6 text-center"
+        >
+          {manga.posterPath && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={manga.posterPath}
+              alt={manga.title}
+              className="h-52 w-auto rounded-2xl shadow-2xl"
+            />
+          )}
+          <div>
+            <h2 className="text-xl font-bold text-white">{manga.title}</h2>
+            <p className="mt-2 text-sm text-white/50">
+              {t("reader.external.message")}
+            </p>
+          </div>
+          <div className="flex w-full flex-col gap-3">
+            {manga.mangaDexUrl && (
+              <a
+                href={manga.mangaDexUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-orange-400/30 bg-orange-500/10 px-5 py-3 text-sm font-semibold text-orange-300 transition hover:bg-orange-500/20"
+              >
+                <ExternalLink size={15} />
+                {t("reader.readOnMangaDex")}
+              </a>
+            )}
+            {manga.anilistUrl && (
+              <a
+                href={manga.anilistUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-blue-400/30 bg-blue-500/10 px-5 py-3 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/20"
+              >
+                <ExternalLink size={15} />
+                {t("reader.viewOnAniList")}
+              </a>
+            )}
+            {!manga.mangaDexUrl && !manga.anilistUrl && (
+              <a
+                href={`https://mangadex.org/search?q=${encodeURIComponent(manga.title)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/[0.08]"
+              >
+                <ExternalLink size={15} />
+                {t("reader.searchOnMangaDex")}
+              </a>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   const pageUrl = `/api/v1/items/${manga.id}/chapters/${chapter.id}/pages/${pageIndex}`;
 

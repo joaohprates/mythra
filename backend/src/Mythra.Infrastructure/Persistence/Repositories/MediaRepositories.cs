@@ -31,20 +31,26 @@ public sealed class MediaItemRepository(MythraDbContext db) : EfRepository<Media
     }
 
     public async Task<IReadOnlyList<MediaItem>> ByIdsAsync(IEnumerable<Guid> ids, CancellationToken ct = default) =>
-        await Set.AsNoTracking().Where(m => ids.Contains(m.Id)).ToListAsync(ct);
+        await Set.AsNoTracking().Include(m => m.Genres).Where(m => ids.Contains(m.Id)).ToListAsync(ct);
 
     public Task<MediaItem?> GetByProviderIdAsync(string providerKind, string providerId, CancellationToken ct = default) =>
         providerKind.ToLower() switch
         {
-            "tmdb"      => Set.FirstOrDefaultAsync(m => m.ProviderTmdbId      == providerId, ct),
-            "imdb"      => Set.FirstOrDefaultAsync(m => m.ProviderImdbId      == providerId, ct),
-            "anilist"   => Set.FirstOrDefaultAsync(m => m.ProviderAnilistId   == providerId, ct),
-            "google"    => Set.FirstOrDefaultAsync(m => m.ProviderGoogleBooksId == providerId, ct),
-            "gutenberg" => Set.FirstOrDefaultAsync(m => m.ProviderGutenbergId == providerId, ct),
-            "librivox"  => Set.FirstOrDefaultAsync(m => m.ProviderLibriVoxId  == providerId, ct),
-            "mangadex"  => Set.FirstOrDefaultAsync(m => m.ProviderMangaDexId  == providerId, ct),
-            _           => Task.FromResult<MediaItem?>(null),
+            "tmdb"        => Set.FirstOrDefaultAsync(m => m.ProviderTmdbId        == providerId, ct),
+            "imdb"        => Set.FirstOrDefaultAsync(m => m.ProviderImdbId        == providerId, ct),
+            "anilist"     => Set.FirstOrDefaultAsync(m => m.ProviderAnilistId     == providerId, ct),
+            // openlibrary reuses the ProviderGoogleBooksId column (no migration needed)
+            "openlibrary" or "google" => Set.FirstOrDefaultAsync(m => m.ProviderGoogleBooksId == providerId, ct),
+            // spotify reuses the ProviderMusicbrainzId column (no migration needed)
+            "spotify"     or "musicbrainz" => Set.FirstOrDefaultAsync(m => m.ProviderMusicbrainzId == providerId, ct),
+            "gutenberg"   => Set.FirstOrDefaultAsync(m => m.ProviderGutenbergId  == providerId, ct),
+            "librivox"    => Set.FirstOrDefaultAsync(m => m.ProviderLibriVoxId   == providerId, ct),
+            "mangadex"    => Set.FirstOrDefaultAsync(m => m.ProviderMangaDexId   == providerId, ct),
+            _             => Task.FromResult<MediaItem?>(null),
         };
+
+    private static readonly string[] AdultGenreNames =
+        ["Hentai", "Ecchi", "Adult", "Adult Content", "Pornography", "Eroge"];
 
     private static IQueryable<MediaItem> ApplyQuery(IQueryable<MediaItem> q, MediaQuery query)
     {
@@ -60,6 +66,13 @@ public sealed class MediaItemRepository(MythraDbContext db) : EfRepository<Media
             q = q.Where(m => m.Genres.Any(g => g.Slug == query.Genre.ToLower()));
         if (query.Year.HasValue)
             q = q.Where(m => m.ReleaseDate.HasValue && m.ReleaseDate.Value.Year == query.Year);
+        if (query.IsAdult.HasValue)
+        {
+            if (query.IsAdult.Value)
+                q = q.Where(m => m.Genres.Any(g => AdultGenreNames.Contains(g.Name)));
+            else
+                q = q.Where(m => !m.Genres.Any(g => AdultGenreNames.Contains(g.Name)));
+        }
         return q;
     }
 
@@ -98,6 +111,9 @@ public sealed class MangaRepository(MythraDbContext db) : EfRepository<MangaItem
 {
     public Task<MangaItem?> GetByIdWithChaptersAsync(Guid id, CancellationToken ct = default) =>
         Set.Include(m => m.Chapters).Include(m => m.Genres).FirstOrDefaultAsync(m => m.Id == id, ct);
+
+    public Task<MangaItem?> GetByRootPathAsync(string rootPath, CancellationToken ct = default) =>
+        Set.Include(m => m.Chapters).FirstOrDefaultAsync(m => m.RootPath == rootPath, ct);
 
     public Task<MangaChapter?> GetChapterAsync(Guid chapterId, CancellationToken ct = default) =>
         Db.MangaChapters.FirstOrDefaultAsync(c => c.Id == chapterId, ct);

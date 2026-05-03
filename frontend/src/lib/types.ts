@@ -11,6 +11,7 @@ export interface Profile {
   avatarPath?: string | null;
   isKidFriendly: boolean;
   theme: string;
+  showAdultContent?: boolean;
 }
 
 export interface User {
@@ -49,6 +50,7 @@ export interface MediaItem {
   genres: string[];
   tags: string[];
   createdAt: string;
+  isAdult?: boolean;
 }
 
 export interface VideoItemDetail extends MediaItem {
@@ -113,6 +115,14 @@ export interface MangaItemDetail extends MediaItem {
   totalChapters?: number | null;
   totalVolumes?: number | null;
   chapters: MangaChapter[];
+  /** True when the item has no local files — metadata-only from an external provider. */
+  isExternal: boolean;
+  /** True when this item contains adult/explicit content. */
+  isAdult: boolean;
+  /** Link to the AniList page for this manga. */
+  anilistUrl?: string | null;
+  /** Link to the MangaDex page for this manga. */
+  mangaDexUrl?: string | null;
 }
 
 export interface MangaChapter {
@@ -135,6 +145,7 @@ export interface BookItemDetail extends MediaItem {
   pageCount?: number | null;
   wordCount?: number | null;
   chapters: BookChapter[];
+  isExternal: boolean;
 }
 
 export interface BookChapter {
@@ -155,6 +166,7 @@ export interface AudioItemDetail extends MediaItem {
   duration?: string | null;
   coverPath?: string | null;
   chapters: AudioChapter[];
+  isExternal: boolean;
 }
 
 export interface AudioChapter {
@@ -182,8 +194,7 @@ export interface Library {
   lastScannedAt?: string | null;
   folderCount: number;
   itemCount?: number | null;
-  allowedExtensions: string[];
-  effectiveExtensions: string[];
+  effectiveExtensions?: string[];
   folders?: LibraryFolder[];
 }
 
@@ -222,6 +233,7 @@ export interface DiscoverItem {
   genres: string[];
   alreadyImported: boolean;
   existingItemId?: string | null;
+  isAdult: boolean;
 }
 
 export interface DiscoverResult {
@@ -296,4 +308,81 @@ export interface SearchResult {
   hits: SearchHit[];
   total: number;
   elapsedMs: number;
+}
+
+// ── Playlists ────────────────────────────────────────────────────────────────
+
+export interface PlaylistItem {
+  id: string;
+  mediaItemId: string;
+  title: string;
+  kind: MediaKind;
+  posterPath?: string | null;
+  rating?: number | null;
+  year?: number | null;
+  order: number;
+  addedAt: string;
+}
+
+export interface Playlist {
+  id: string;
+  profileId: string;
+  name: string;
+  description?: string | null;
+  isPublic: boolean;
+  coverImagePath?: string | null;
+  itemCount: number;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
+export interface PlaylistDetail extends Playlist {
+  items: PlaylistItem[];
+}
+
+// ── Favorites ────────────────────────────────────────────────────────────────
+
+export interface FavoriteItem {
+  id: string;
+  profileId: string;
+  mediaItemId: string;
+  addedAt: string;
+  mediaItem?: MediaItem;
+}
+
+export interface FavoriteStatus {
+  isFavorite: boolean;
+}
+
+// ── Statistics ───────────────────────────────────────────────────────────────
+
+export interface GenreStat {
+  genre: string;
+  count: number;
+  percentage: number;
+}
+
+export interface WeeklyActivity {
+  week: string;
+  itemsWatched: number;
+  watchTime: string; // ISO 8601 duration
+}
+
+export interface MediaKindBreakdown {
+  kind: MediaKind;
+  count: number;
+  percentage: number;
+}
+
+export interface ProfileStatistics {
+  profileId: string;
+  totalWatchTime: string;
+  totalReadTime: string;
+  totalItemsWatched: number;
+  totalItemsRead: number;
+  totalItemsCompleted: number;
+  topGenres: GenreStat[];
+  weeklyActivity: WeeklyActivity[];
+  kindBreakdown: MediaKindBreakdown[];
+  generatedAt: string;
 }

@@ -27,7 +27,7 @@ public sealed class TmdbMetadataProvider(
         }
         if (!Supports(kind)) return [];
 
-        var url = $"/search/multi?api_key={_opts.TmdbApiKey}&query={Uri.EscapeDataString(query)}&include_adult=false&language=en-US";
+        var url = $"search/multi?api_key={_opts.TmdbApiKey}&query={Uri.EscapeDataString(query)}&include_adult=false&language=en-US";
         if (year.HasValue) url += $"&year={year}";
 
         try
@@ -56,7 +56,7 @@ public sealed class TmdbMetadataProvider(
         if (parts.Length != 2) return null;
         var (type, id) = (parts[0], parts[1]);
 
-        var url = $"/{type}/{id}?api_key={_opts.TmdbApiKey}&language=en-US&append_to_response=external_ids";
+        var url = $"{type}/{id}?api_key={_opts.TmdbApiKey}&language=en-US&append_to_response=external_ids";
         try
         {
             var json = await http.GetFromJsonAsync<JsonElement>(url, ct);

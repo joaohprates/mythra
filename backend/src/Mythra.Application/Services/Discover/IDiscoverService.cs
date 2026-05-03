@@ -15,7 +15,8 @@ public sealed record DiscoverItemDto(
     string? BackdropPath,
     IReadOnlyList<string> Genres,
     bool AlreadyImported,
-    string? ExistingItemId);
+    string? ExistingItemId,
+    bool IsAdult = false);
 
 public sealed record DiscoverResultDto(
     IReadOnlyList<DiscoverItemDto> Items,
@@ -39,14 +40,23 @@ public sealed record ImportResultDto(
     Guid LibraryId,
     string WatchUrl);
 
+/// <summary>
+/// Discover query — supports two modes:
+///   • Catalog mode (no Query): browse curated lists by Type/Category.
+///   • Search mode (Query set): free-text search across providers.
+/// </summary>
+public sealed record DiscoverQuery(
+    string? Query,
+    MediaKind Kind,
+    string Type,         // "movie" | "series" | "anime" | "manga" | "book" | "music"
+    string Category,     // "popular" | "trending" | "top" | "year" | "rating"
+    int Skip,
+    int Take,
+    string? Provider);
+
 public interface IDiscoverService
 {
-    Task<Result<DiscoverResultDto>> SearchAsync(
-        string query,
-        MediaKind kind,
-        int skip,
-        int take,
-        CancellationToken ct = default);
+    Task<Result<DiscoverResultDto>> SearchAsync(DiscoverQuery query, CancellationToken ct = default);
 
     Task<Result<ImportResultDto>> ImportAsync(
         ImportExternalRequest req,

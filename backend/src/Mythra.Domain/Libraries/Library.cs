@@ -15,12 +15,6 @@ public sealed class Library : AggregateRoot
     public bool IsSystem { get; set; } = false;
     public DateTimeOffset? LastScannedAt { get; set; }
 
-    /// <summary>
-    /// File extensions this library will index during scans.
-    /// Empty list = use the default extensions for <see cref="Kind"/>.
-    /// </summary>
-    public List<string> AllowedExtensions { get; set; } = [];
-
     public List<LibraryFolder> Folders { get; set; } = [];
 
     private Library() { }
@@ -55,15 +49,8 @@ public sealed class Library : AggregateRoot
         Touch();
     }
 
-    /// <summary>
-    /// Returns the effective extensions to scan.
-    /// If <see cref="AllowedExtensions"/> is non-empty, those are used.
-    /// Otherwise the defaults for the <see cref="Kind"/> are returned.
-    /// </summary>
-    public IReadOnlyList<string> GetEffectiveExtensions() =>
-        AllowedExtensions.Count > 0
-            ? AllowedExtensions.AsReadOnly()
-            : GetDefaultExtensions(Kind);
+    /// <summary>Returns the default extensions for this library kind.</summary>
+    public IReadOnlyList<string> GetEffectiveExtensions() => GetDefaultExtensions(Kind);
 
     public static IReadOnlyList<string> GetDefaultExtensions(LibraryKind kind) => kind switch
     {

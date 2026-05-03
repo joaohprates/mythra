@@ -1,8 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bookmark, ChevronDown, Download, Headphones, Library, Play } from "lucide-react";
+import { Bookmark, ChevronDown, Download, Headphones, Library, Play, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -10,6 +10,8 @@ import { Topbar } from "@/components/shell/Topbar";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import { cn } from "@/lib/cn";
+import { cleanDescription } from "@/lib/text";
+import { useTranslation } from "@/store/locale";
 
 interface ItemAny {
   id: string;
@@ -57,6 +59,7 @@ export default function ItemDetailPage() {
   const params = useParams<{ id: string }>();
   const accessToken = useAuthStore((s) => s.accessToken);
   const isHydrated = useAuthStore((s) => s.isHydrated);
+  const t = useTranslation();
 
   useEffect(() => {
     if (isHydrated && !accessToken) router.replace("/login");
@@ -115,11 +118,18 @@ export default function ItemDetailPage() {
                 </div>
 
                 <div>
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] uppercase tracking-widest text-mythra-text-soft">
-                    {item.kind}
-                    {item.videoKind && ` • ${item.videoKind}`}
-                    {item.audioKind && ` • ${item.audioKind}`}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] uppercase tracking-widest text-mythra-text-soft">
+                      {item.kind}
+                      {item.videoKind && ` • ${item.videoKind}`}
+                      {item.audioKind && ` • ${item.audioKind}`}
+                    </span>
+                    {item.genres?.some(g => ["Hentai", "Ecchi", "Adult", "Adult Content", "Pornography", "Eroge"].includes(g)) && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-red-400/30 bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-300">
+                        +18
+                      </span>
+                    )}
+                  </div>
                   <h1 className="mt-4 text-4xl font-bold tracking-tight md:text-6xl">
                     <span className="gradient-text">{item.title}</span>
                   </h1>
@@ -152,21 +162,19 @@ export default function ItemDetailPage() {
                   </div>
 
                   {item.overview && (
-                    <p className="mt-5 max-w-3xl text-sm leading-relaxed text-mythra-text-muted md:text-base">
-                      {item.overview}
+                    <p className="mt-5 max-w-3xl text-sm leading-relaxed text-mythra-text-muted md:text-base whitespace-pre-line">
+                      {cleanDescription(item.overview)}
                     </p>
                   )}
 
                   <div className="mt-7 flex flex-wrap gap-3">
                     {!isSeries && <PrimaryAction kind={item.kind} id={item.id} />}
-                    <button className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/[0.08]">
-                      <Bookmark size={16} /> Add to list
-                    </button>
+                    <ActionBtn label={t("action.addToList")} icon={<Bookmark size={16} />} />
                     <Link
                       href={`/library/all/${item.kind}`}
                       className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/[0.08]"
                     >
-                      <Library size={16} /> Library
+                      <Library size={16} /> {t("nav.library")}
                     </Link>
                     {item.fileStatus === "Available" && item.hasFile !== false && (
                       <a
@@ -174,9 +182,10 @@ export default function ItemDetailPage() {
                         download
                         className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/[0.08]"
                       >
-                        <Download size={16} /> Download
+                        <Download size={16} /> {t("action.download")}
                       </a>
                     )}
+                    <RemoveFromLibraryBtn id={item.id} title={item.title} />
                   </div>
 
                   {item.genres && item.genres.length > 0 && (
@@ -366,7 +375,9 @@ function EpisodeRow({ ep }: { ep: EpisodeDto }) {
           )}
         </div>
         {ep.overview && (
-          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-mythra-text-muted">{ep.overview}</p>
+          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-mythra-text-muted whitespace-pre-line">
+            {cleanDescription(ep.overview)}
+          </p>
         )}
         {/* Streaming badge */}
         {!ep.hasFile && ep.imdbId && (
@@ -395,12 +406,24 @@ function groupBySeason(episodes: EpisodeDto[]): Record<number, EpisodeDto[]> {
   return map;
 }
 
+function ActionBtn({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick?: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/[0.08]"
+    >
+      {icon} {label}
+    </button>
+  );
+}
+
 function PrimaryAction({ kind, id }: { kind: string; id: string }) {
+  const t = useTranslation();
   const cfg = {
-    Video: { href: `/watch/${id}`, icon: <Play size={16} className="fill-current" />, label: "Watch now" },
-    Manga: { href: `/read/${id}`, icon: <Library size={16} />, label: "Read now" },
-    Book: { href: `/read/${id}`, icon: <Library size={16} />, label: "Read now" },
-    Audio: { href: `/listen/${id}`, icon: <Headphones size={16} />, label: "Listen now" },
+    Video: { href: `/watch/${id}`, icon: <Play size={16} className="fill-current" />, label: t("action.watchNow") },
+    Manga: { href: `/read/${id}`, icon: <Library size={16} />, label: t("action.readNow") },
+    Book: { href: `/read/${id}`, icon: <Library size={16} />, label: t("action.readNow") },
+    Audio: { href: `/listen/${id}`, icon: <Headphones size={16} />, label: t("action.listenNow") },
   } as const;
   const c = cfg[kind as keyof typeof cfg] ?? cfg.Video;
   return (
@@ -410,6 +433,49 @@ function PrimaryAction({ kind, id }: { kind: string; id: string }) {
     >
       {c.icon} {c.label}
     </Link>
+  );
+}
+
+function RemoveFromLibraryBtn({ id, title }: { id: string; title: string }) {
+  const t = useTranslation();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRemove = async () => {
+    if (!confirm(`${t("action.removeFromLibrary")}?\n\n"${title}"`)) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.delete(`/items/${id}`);
+      // Drop the cached detail entirely and invalidate everything that could
+      // reference the item — home rows, library grids, favorites, playlists,
+      // recommendations, search results, recently-added.
+      queryClient.removeQueries({ queryKey: ["item-detail", id] });
+      await queryClient.invalidateQueries();
+      router.replace("/");
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string; title?: string } } })?.response?.data;
+      setError(detail?.detail ?? detail?.title ?? "Failed to remove. Try again.");
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        onClick={handleRemove}
+        disabled={deleting}
+        className="inline-flex items-center gap-2 rounded-full border border-red-400/20 bg-red-500/10 px-5 py-3 text-sm font-medium text-red-300 backdrop-blur transition hover:bg-red-500/20 disabled:opacity-50"
+      >
+        <Trash2 size={16} /> {deleting ? "…" : t("action.removeFromLibrary")}
+      </button>
+      {error && (
+        <span className="text-[11px] text-red-300/80">{error}</span>
+      )}
+    </div>
   );
 }
 

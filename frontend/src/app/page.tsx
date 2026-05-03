@@ -10,6 +10,7 @@ import { HeroBanner } from "@/components/media/HeroBanner";
 import { ContentRow } from "@/components/media/ContentRow";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
+import { useProfilePrefs } from "@/store/profile";
 import type { MediaItem, PlaybackProgress, ReadingProgressDto } from "@/lib/types";
 
 type RecommendationItem = {
@@ -35,39 +36,45 @@ export default function HomePage() {
     if (isHydrated && !accessToken) router.replace("/login");
   }, [isHydrated, accessToken, router]);
 
+  const { showAdultContent } = useProfilePrefs();
+
+  // When adult content is disabled, explicitly filter it out from all queries
+  const adultFilter = showAdultContent ? undefined : false;
+
   const recentVideo = useQuery({
-    queryKey: ["recent", "Video"],
-    queryFn: async () => (await api.get<MediaItem[]>("/items/recently-added", { params: { take: 18 } })).data,
+    queryKey: ["recent", "Video", adultFilter],
+    queryFn: async () =>
+      (await api.get<{ items: MediaItem[] }>("/items", { params: { take: 18, orderBy: "-added", isAdult: adultFilter } })).data.items,
     enabled: !!accessToken,
   });
 
   const trendingMovies = useQuery({
-    queryKey: ["videos", "movies"],
-    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Video", take: 18 } })).data.items,
+    queryKey: ["videos", "movies", adultFilter],
+    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Video", take: 18, isAdult: adultFilter } })).data.items,
     enabled: !!accessToken,
   });
 
   const animeRow = useQuery({
-    queryKey: ["videos", "anime"],
-    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Video", search: "anime", take: 18 } })).data.items,
+    queryKey: ["videos", "anime", adultFilter],
+    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Video", search: "anime", take: 18, isAdult: adultFilter } })).data.items,
     enabled: !!accessToken,
   });
 
   const mangaRow = useQuery({
-    queryKey: ["mangas"],
-    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Manga", take: 18 } })).data.items,
+    queryKey: ["mangas", adultFilter],
+    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Manga", take: 18, isAdult: adultFilter } })).data.items,
     enabled: !!accessToken,
   });
 
   const bookRow = useQuery({
-    queryKey: ["books"],
-    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Book", take: 18 } })).data.items,
+    queryKey: ["books", adultFilter],
+    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Book", take: 18, isAdult: adultFilter } })).data.items,
     enabled: !!accessToken,
   });
 
   const audioRow = useQuery({
-    queryKey: ["audio"],
-    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Audio", take: 18 } })).data.items,
+    queryKey: ["audio", adultFilter],
+    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Audio", take: 18, isAdult: adultFilter } })).data.items,
     enabled: !!accessToken,
   });
 
@@ -113,11 +120,11 @@ export default function HomePage() {
 
         <div className="space-y-12">
           {continueWatching.data && continueWatching.data.length > 0 && (
-            <ContentRow title="Continue Watching" subtitle="Pick up where you left off" items={continueWatching.data} size="md" />
+            <ContentRow title="Continue Watching" subtitle="Continue de onde parou" items={continueWatching.data} size="md" />
           )}
           {(recommendations.data?.length ?? 0) > 0 && (
             <ContentRow
-              title="Recommended For You"
+              title="Recomendado Para Você"
               subtitle={recommendations.data?.[0]?.reason}
               items={(recommendations.data ?? []).map((r) => ({
                 id: r.id,
@@ -134,12 +141,12 @@ export default function HomePage() {
               size="md"
             />
           )}
-          <ContentRow title="Recently Added" subtitle="Fresh in your universe" items={recentVideo.data ?? []} size="md" loading={recentVideo.isLoading} />
-          <ContentRow title="Movies & TV" items={trendingMovies.data ?? []} size="md" loading={trendingMovies.isLoading} />
+          <ContentRow title="Adicionados Recentemente" subtitle="Novidades no seu universo" items={recentVideo.data ?? []} size="md" loading={recentVideo.isLoading} />
+          <ContentRow title="Filmes & Séries" items={trendingMovies.data ?? []} size="md" loading={trendingMovies.isLoading} />
           {(animeRow.data?.length ?? 0) > 0 && <ContentRow title="Anime" items={animeRow.data ?? []} size="md" />}
-          {(mangaRow.data?.length ?? 0) > 0 && <ContentRow title="Manga" items={mangaRow.data ?? []} size="sm" />}
-          {(bookRow.data?.length ?? 0) > 0 && <ContentRow title="Books" items={bookRow.data ?? []} size="sm" />}
-          {(audioRow.data?.length ?? 0) > 0 && <ContentRow title="Audiobooks" items={audioRow.data ?? []} size="md" />}
+          {(mangaRow.data?.length ?? 0) > 0 && <ContentRow title="Mangá" items={mangaRow.data ?? []} size="sm" />}
+          {(bookRow.data?.length ?? 0) > 0 && <ContentRow title="Livros" items={bookRow.data ?? []} size="sm" />}
+          {(audioRow.data?.length ?? 0) > 0 && <ContentRow title="Music" items={audioRow.data ?? []} size="md" />}
         </div>
 
         {!recentVideo.isLoading && (recentVideo.data?.length ?? 0) === 0 && (

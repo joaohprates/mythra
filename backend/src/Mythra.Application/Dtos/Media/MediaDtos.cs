@@ -23,7 +23,8 @@ public sealed record MediaItemDto(
     string? Language,
     IReadOnlyList<string> Genres,
     IReadOnlyList<string> Tags,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    bool IsAdult = false);
 
 public sealed record VideoItemDto(
     Guid Id,
@@ -53,7 +54,8 @@ public sealed record VideoItemDto(
     /// <summary>True when there is a local media file on disk; false for virtual/external-only items.</summary>
     bool HasFile = true,
     string? ImdbId = null,
-    Guid? ParentId = null);
+    Guid? ParentId = null,
+    string Kind = "Video");
 
 public sealed record SubtitleDto(Guid Id, string LanguageCode, string? DisplayName, string Format, SubtitleKind Kind, bool IsDefault, bool IsForced);
 
@@ -73,7 +75,16 @@ public sealed record MangaItemDto(
     int? TotalVolumes,
     string? PosterPath,
     string? Overview,
-    IReadOnlyList<MangaChapterDto> Chapters);
+    IReadOnlyList<MangaChapterDto> Chapters,
+    string Kind = "Manga",
+    /// <summary>True when the item has no local files — only metadata from an external provider.</summary>
+    bool IsExternal = false,
+    /// <summary>True when this item contains adult content (Hentai / explicit genres).</summary>
+    bool IsAdult = false,
+    /// <summary>Link to the AniList entry, present when imported via AniList.</summary>
+    string? AnilistUrl = null,
+    /// <summary>Link to MangaDex entry, present when a MangaDex provider ID is known.</summary>
+    string? MangaDexUrl = null);
 
 public sealed record MangaChapterDto(Guid Id, int? VolumeNumber, double ChapterNumber, string? Title, int PageCount, string? CoverPath, DateOnly? ReleaseDate);
 
@@ -91,7 +102,9 @@ public sealed record BookItemDto(
     int? WordCount,
     string? PosterPath,
     string? Overview,
-    IReadOnlyList<BookChapterDto> Chapters);
+    IReadOnlyList<BookChapterDto> Chapters,
+    string Kind = "Book",
+    bool IsExternal = false);
 
 public sealed record BookChapterDto(Guid Id, int Order, string Title, string? Anchor, int? StartPage, int? EndPage);
 
@@ -107,7 +120,9 @@ public sealed record AudioItemDto(
     TimeSpan? Duration,
     string? CoverPath,
     string? Overview,
-    IReadOnlyList<AudioChapterDto> Chapters);
+    IReadOnlyList<AudioChapterDto> Chapters,
+    string Kind = "Audio",
+    bool IsExternal = false);
 
 public sealed record AudioChapterDto(Guid Id, int Order, string Title, TimeSpan Start, TimeSpan Duration);
 

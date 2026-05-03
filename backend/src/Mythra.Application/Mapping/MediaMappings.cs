@@ -26,7 +26,8 @@ public static class MediaMappings
         item.Language,
         item.Genres.Select(g => g.Name).ToList(),
         item.Tags.Select(t => t.Name).ToList(),
-        item.CreatedAt);
+        item.CreatedAt,
+        IsAdult: (item.Genres ?? []).Any(g => AdultGenres.Contains(g.Name)));
 
     public static VideoItemDto ToDetail(this VideoItem v) => new(
         v.Id,
@@ -55,7 +56,11 @@ public static class MediaMappings
         (v.ChapterMarkers ?? []).Select(c => new ChapterMarkerDto(c.Id, c.Kind, c.Label, c.Start, c.End, c.ThumbPath)).ToList(),
         HasFile: !string.IsNullOrWhiteSpace(v.FilePath),
         ImdbId: v.ProviderImdbId,
-        ParentId: v.ParentId);
+        ParentId: v.ParentId,
+        Kind: "Video");
+
+    private static readonly HashSet<string> AdultGenres = new(StringComparer.OrdinalIgnoreCase)
+        { "Hentai", "Ecchi", "Adult", "Adult Content", "Pornography", "Eroge" };
 
     public static MangaItemDto ToDetail(this MangaItem m) => new(
         m.Id,
@@ -71,7 +76,12 @@ public static class MediaMappings
         m.Overview,
         m.Chapters.OrderBy(c => c.VolumeNumber ?? 0).ThenBy(c => c.ChapterNumber)
             .Select(c => new MangaChapterDto(c.Id, c.VolumeNumber, c.ChapterNumber, c.Title, c.PageCount, c.CoverPath, c.ReleaseDate))
-            .ToList());
+            .ToList(),
+        Kind: "Manga",
+        IsExternal: string.IsNullOrWhiteSpace(m.RootPath),
+        IsAdult: (m.Genres ?? []).Any(g => AdultGenres.Contains(g.Name)),
+        AnilistUrl: m.ProviderAnilistId is not null ? $"https://anilist.co/manga/{m.ProviderAnilistId}" : null,
+        MangaDexUrl: m.ProviderMangaDexId is not null ? $"https://mangadex.org/title/{m.ProviderMangaDexId}" : null);
 
     public static BookItemDto ToDetail(this BookItem b) => new(
         b.Id,
@@ -89,7 +99,9 @@ public static class MediaMappings
         b.Overview,
         b.Chapters.OrderBy(c => c.Order)
             .Select(c => new BookChapterDto(c.Id, c.Order, c.Title, c.Anchor, c.StartPage, c.EndPage))
-            .ToList());
+            .ToList(),
+        Kind: "Book",
+        IsExternal: string.IsNullOrWhiteSpace(b.FilePath));
 
     public static AudioItemDto ToDetail(this AudioItem a) => new(
         a.Id,
@@ -105,5 +117,7 @@ public static class MediaMappings
         a.Overview,
         a.Chapters.OrderBy(c => c.Order)
             .Select(c => new AudioChapterDto(c.Id, c.Order, c.Title, c.Start, c.Duration))
-            .ToList());
+            .ToList(),
+        Kind: "Audio",
+        IsExternal: string.IsNullOrWhiteSpace(a.RootPath));
 }

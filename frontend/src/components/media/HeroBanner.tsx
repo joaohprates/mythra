@@ -5,6 +5,7 @@ import { Info, Play } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { heroBackdrop, overlayGradient } from "@/lib/motion";
+import { cleanDescription } from "@/lib/text";
 import type { MediaItem } from "@/lib/types";
 
 interface Props {
@@ -74,7 +75,7 @@ export function HeroBanner({ items, intervalMs = 8000 }: Props) {
             )}
             {current.overview && (
               <p className="mt-5 line-clamp-3 max-w-xl text-sm leading-relaxed text-mythra-text-muted md:text-base">
-                {current.overview}
+                {cleanDescription(current.overview)}
               </p>
             )}
 

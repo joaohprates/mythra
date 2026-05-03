@@ -57,9 +57,13 @@ export default function LibraryByTypePage() {
 
         {!items.isLoading && (items.data?.items.length ?? 0) === 0 && (
           <div className="mt-24 text-center text-mythra-text-muted text-sm">
-            No {label.toLowerCase()} yet. Add a library in{" "}
-            <a href="/settings" className="text-mythra-purple underline-offset-2 hover:underline">
-              Settings
+            No {label.toLowerCase()} yet.{" "}
+            <a href="/discover" className="text-mythra-purple underline-offset-2 hover:underline">
+              Discover &amp; import content
+            </a>
+            {" "}or add a local library in{" "}
+            <a href="/settings#libraries" className="text-mythra-purple underline-offset-2 hover:underline">
+              Settings → Libraries
             </a>
             .
           </div>

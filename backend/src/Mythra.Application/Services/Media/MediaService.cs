@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Mythra.Application.Abstractions.Persistence;
 using Mythra.Application.Dtos.Media;
 using Mythra.Application.Mapping;
@@ -16,7 +17,8 @@ public sealed class MediaService(
     IMangaRepository mangas,
     IBookRepository books,
     IAudioRepository audios,
-    IGenreRepository genres) : IMediaService
+    IGenreRepository genres,
+    IUnitOfWork uow) : IMediaService
 {
     public async Task<Result<PagedResult<MediaItemDto>>> ListAsync(MediaQuery query, CancellationToken ct = default)
     {
@@ -94,4 +96,14 @@ public sealed class MediaService(
         var hydrated = await audios.GetByIdWithChaptersAsync(a.Id, ct) ?? a;
         return hydrated.ToDetail();
     }
+
+    public async Task<Result> DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        var item = await media.GetByIdAsync(id, ct);
+        if (item is null) return Result.Failure(Error.NotFound("MediaItem", id));
+        media.Remove(item);
+        await uow.SaveChangesAsync(ct);
+        return Result.Success();
+    }
 }
+

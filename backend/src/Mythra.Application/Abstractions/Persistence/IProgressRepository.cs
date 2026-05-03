@@ -6,12 +6,14 @@ public interface IPlaybackProgressRepository : IRepository<PlaybackProgress>
 {
     Task<PlaybackProgress?> GetAsync(Guid profileId, Guid mediaItemId, CancellationToken ct = default);
     Task<IReadOnlyList<PlaybackProgress>> ContinueWatchingAsync(Guid profileId, int take, CancellationToken ct = default);
+    Task<IReadOnlyList<PlaybackProgress>> GetAllForProfileAsync(Guid profileId, DateTimeOffset? since = null, CancellationToken ct = default);
 }
 
 public interface IReadingProgressRepository : IRepository<ReadingProgress>
 {
     Task<ReadingProgress?> GetAsync(Guid profileId, Guid mediaItemId, CancellationToken ct = default);
     Task<IReadOnlyList<ReadingProgress>> ContinueReadingAsync(Guid profileId, int take, CancellationToken ct = default);
+    Task<IReadOnlyList<ReadingProgress>> GetAllForProfileAsync(Guid profileId, DateTimeOffset? since = null, CancellationToken ct = default);
 }
 
 public interface IBookmarkRepository : IRepository<Bookmark>

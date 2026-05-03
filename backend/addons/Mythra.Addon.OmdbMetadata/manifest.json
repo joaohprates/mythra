@@ -1,0 +1,45 @@
+{
+  "id": "io.mythra.omdb-metadata",
+  "name": "OMDb / IMDb Metadata",
+  "description": "Fetches movie and series metadata directly from the OMDb API (Open Movie Database), which is powered by IMDb data. Returns IMDb ratings, awards, cast, and detailed plot info.",
+  "version": "1.0.0",
+  "author": "Mythra Team",
+  "homepage": "https://www.omdbapi.com",
+  "minHostVersion": "0.1.0",
+  "capabilities": ["MetadataProvider"],
+  "requiredPermissions": ["Network", "Cache", "ReadSecrets", "ReadConfig"],
+  "optionalPermissions": [],
+  "entryPoint": {
+    "assembly": "Mythra.Addon.OmdbMetadata.dll",
+    "type": "Mythra.Addon.OmdbMetadata.OmdbMetadataAddon"
+  },
+  "requiredSecrets": [
+    "ApiKey"
+  ],
+  "configSchema": [
+    {
+      "key": "ImageSize",
+      "label": "Poster image size",
+      "description": "OMDb returns a single poster URL — this is passed as-is.",
+      "type": "String",
+      "defaultValue": "original",
+      "required": false
+    },
+    {
+      "key": "SearchCacheTtlMinutes",
+      "label": "Search cache TTL (minutes)",
+      "description": "How long search results are cached. Default: 60.",
+      "type": "Number",
+      "defaultValue": "60",
+      "required": false
+    },
+    {
+      "key": "DetailCacheTtlHours",
+      "label": "Detail cache TTL (hours)",
+      "description": "How long full movie details are cached. Default: 24.",
+      "type": "Number",
+      "defaultValue": "24",
+      "required": false
+    }
+  ]
+}

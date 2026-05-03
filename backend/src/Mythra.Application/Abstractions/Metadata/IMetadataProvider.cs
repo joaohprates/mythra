@@ -12,7 +12,8 @@ public sealed record MetadataSearchResult(
     string? BackdropUrl,
     double? Rating,
     IReadOnlyList<string> Genres,
-    IReadOnlyDictionary<string, string> ProviderIds);
+    IReadOnlyDictionary<string, string> ProviderIds,
+    bool IsAdult = false);
 
 public interface IMetadataProvider
 {
@@ -26,4 +27,10 @@ public interface IMetadataProviderRegistry
 {
     IMetadataProvider? GetByName(string name);
     IReadOnlyList<IMetadataProvider> ProvidersFor(MediaKind kind);
+
+    /// <summary>Dynamically register a provider (called by the addon host after loading an addon).</summary>
+    void Register(IMetadataProvider provider);
+
+    /// <summary>Unregister a provider by name (called when an addon is unloaded).</summary>
+    void Unregister(string providerName);
 }

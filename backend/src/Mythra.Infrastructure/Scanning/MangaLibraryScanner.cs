@@ -29,6 +29,7 @@ public sealed partial class MangaLibraryScanner(
         var failed = 0;
         var errors = new List<string>();
         var newItemIds = new List<Guid>();
+        var extensions = ArchiveExtensions;
 
         foreach (var root in rootPaths)
         {
@@ -38,13 +39,24 @@ public sealed partial class MangaLibraryScanner(
                 continue;
             }
 
-            foreach (var seriesDir in Directory.EnumerateDirectories(root, "*", SearchOption.TopDirectoryOnly))
+            // Collect directories to scan: subdirectories + root itself (for root-level archives)
+            var dirsToScan = new List<string>();
+            dirsToScan.AddRange(Directory.EnumerateDirectories(root, "*", SearchOption.TopDirectoryOnly));
+
+            // Check for root-level manga archives and treat root as a "series" if found
+            var rootArchives = Directory.EnumerateFiles(root, "*", SearchOption.TopDirectoryOnly)
+                .Where(f => extensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                .ToList();
+            if (rootArchives.Count > 0)
+                dirsToScan.Insert(0, root);
+
+            foreach (var seriesDir in dirsToScan)
             {
                 ct.ThrowIfCancellationRequested();
                 try
                 {
                     var seriesName = new DirectoryInfo(seriesDir).Name;
-                    var existing = (await mangas.GetByIdWithChaptersAsync(Guid.Empty, ct));
+                    var existing = await mangas.GetByRootPathAsync(seriesDir, ct);
                     var manga = existing ?? new MangaItem
                     {
                         LibraryId = libraryId,
@@ -53,8 +65,10 @@ public sealed partial class MangaLibraryScanner(
                     };
                     var isNew = existing is null;
 
-                    var chapterFiles = Directory.EnumerateFiles(seriesDir, "*", SearchOption.AllDirectories)
-                        .Where(f => ArchiveExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                    // For root, only get top-level files; for subdirs, get all recursively
+                    var searchOption = seriesDir == root ? SearchOption.TopDirectoryOnly : SearchOption.AllDirectories;
+                    var chapterFiles = Directory.EnumerateFiles(seriesDir, "*", searchOption)
+                        .Where(f => extensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
                         .OrderBy(f => f)
                         .ToList();
 

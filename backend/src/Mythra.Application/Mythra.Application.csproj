@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Mythra.Addons.Contracts\Mythra.Addons.Contracts.csproj" />
     <ProjectReference Include="..\Mythra.Domain\Mythra.Domain.csproj" />
   </ItemGroup>
 

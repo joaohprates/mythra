@@ -51,13 +51,6 @@ public sealed class LibrariesController(ILibraryService libraries) : ControllerB
     public async Task<IActionResult> RemoveFolder(Guid id, Guid folderId, CancellationToken ct) =>
         (await libraries.RemoveFolderAsync(id, folderId, ct)).ToActionResult();
 
-    // ── Extensions ───────────────────────────────────────────────────────────
-
-    [HttpPut("{id:guid}/extensions")]
-    [Authorize(Roles = "Admin,Manager")]
-    public async Task<IActionResult> UpdateExtensions(Guid id, [FromBody] UpdateExtensionsRequest req, CancellationToken ct) =>
-        (await libraries.UpdateExtensionsAsync(id, req, ct)).ToActionResult();
-
     // ── Scan ─────────────────────────────────────────────────────────────────
 
     [HttpPost("{id:guid}/scan")]
