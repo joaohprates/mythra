@@ -1,0 +1,42 @@
+{
+  "id": "io.mythra.movies-embed",
+  "name": "Movies Embed Stream",
+  "description": "Resolves a streamable embed URL for movies and TV episodes by IMDb ID. Configurable upstream embed host so the user can swap providers without code changes.",
+  "version": "1.0.0",
+  "author": "Mythra Team",
+  "homepage": "https://mythra.local",
+  "minHostVersion": "0.1.0",
+  "capabilities": ["StreamSourceProvider"],
+  "requiredPermissions": ["Network", "Cache", "ReadConfig"],
+  "optionalPermissions": [],
+  "entryPoint": {
+    "assembly": "Mythra.Addon.MoviesEmbed.dll",
+    "type": "Mythra.Addon.MoviesEmbed.MoviesEmbedAddon"
+  },
+  "requiredSecrets": [],
+  "configSchema": [
+    {
+      "key": "EmbedBaseUrl",
+      "label": "Embed base URL",
+      "description": "Base URL pattern. Use {imdbId}, {season}, {episode} placeholders. Example: https://example.tld/embed/movie/{imdbId}",
+      "type": "String",
+      "defaultValue": "https://example.tld/embed",
+      "required": true
+    },
+    {
+      "key": "SeriesEmbedBaseUrl",
+      "label": "Series embed base URL",
+      "description": "Pattern for series episodes. Example: https://example.tld/embed/tv/{imdbId}/{season}/{episode}",
+      "type": "String",
+      "defaultValue": "https://example.tld/embed/tv/{imdbId}/{season}/{episode}",
+      "required": false
+    },
+    {
+      "key": "Priority",
+      "label": "Priority (higher = tried first)",
+      "type": "Number",
+      "defaultValue": "100",
+      "required": false
+    }
+  ]
+}

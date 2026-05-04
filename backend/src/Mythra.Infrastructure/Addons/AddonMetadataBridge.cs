@@ -53,7 +53,6 @@ internal sealed class AddonMetadataBridge(IMetadataAddon addon, ILogger logger) 
         MediaKind.Video => AddonMediaKind.Movie,
         MediaKind.Book  => AddonMediaKind.Book,
         MediaKind.Manga => AddonMediaKind.Manga,
-        MediaKind.Audio => AddonMediaKind.Audiobook,
         _               => AddonMediaKind.Movie,
     };
 

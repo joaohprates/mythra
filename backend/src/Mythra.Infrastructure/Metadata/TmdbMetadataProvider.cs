@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Mythra.Application.Abstractions.Metadata;
@@ -9,10 +10,12 @@ namespace Mythra.Infrastructure.Metadata;
 
 public sealed class TmdbMetadataProvider(
     HttpClient http,
+    IMemoryCache cache,
     IOptions<MetadataOptions> opts,
     ILogger<TmdbMetadataProvider> log) : IMetadataProvider
 {
     private readonly MetadataOptions _opts = opts.Value;
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(10);
 
     public string Name => "tmdb";
 
@@ -32,7 +35,9 @@ public sealed class TmdbMetadataProvider(
 
         try
         {
-            var response = await http.GetFromJsonAsync<TmdbSearchResponse>(url, ct);
+            var json = await GetJsonCachedAsync(url, ct);
+            if (json is null) return [];
+            var response = JsonSerializer.Deserialize<TmdbSearchResponse>(json);
             if (response?.Results is null) return [];
             return response.Results
                 .Where(r => r.MediaType is "movie" or "tv")
@@ -59,7 +64,9 @@ public sealed class TmdbMetadataProvider(
         var url = $"{type}/{id}?api_key={_opts.TmdbApiKey}&language=en-US&append_to_response=external_ids";
         try
         {
-            var json = await http.GetFromJsonAsync<JsonElement>(url, ct);
+            var jsonStr = await GetJsonCachedAsync(url, ct);
+            if (jsonStr is null) return null;
+            var json = JsonSerializer.Deserialize<JsonElement>(jsonStr);
             return MapDetail(json, type);
         }
         catch (Exception ex)
@@ -67,6 +74,17 @@ public sealed class TmdbMetadataProvider(
             log.LogWarning(ex, "TMDb fetch failed for {Id}", providerId);
             return null;
         }
+    }
+
+    private async Task<string?> GetJsonCachedAsync(string url, CancellationToken ct)
+    {
+        var key = $"tmdb:{url}";
+        if (cache.TryGetValue(key, out string? json) && json is not null) return json;
+        var resp = await http.GetAsync(url, ct);
+        if (!resp.IsSuccessStatusCode) return null;
+        json = await resp.Content.ReadAsStringAsync(ct);
+        cache.Set(key, json, CacheTtl);
+        return json;
     }
 
     private MetadataSearchResult MapResult(TmdbResult r)

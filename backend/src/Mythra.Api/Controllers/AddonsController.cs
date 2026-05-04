@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Mythra.Api.Common;
+using Mythra.Addons.Contracts.Models;
+using Mythra.Application.Abstractions.Addons;
 using Mythra.Application.Abstractions.Auth;
 using Mythra.Application.Services.Addons;
 using System.Text;
@@ -13,8 +15,39 @@ namespace Mythra.Api.Controllers;
 [Authorize]
 public sealed class AddonsController(
     IAddonService addonService,
-    ICurrentUser currentUser) : ControllerBase
+    IAddonHost    addonHost,
+    ICurrentUser  currentUser) : ControllerBase
 {
+    /// <summary>
+    /// Returns which media-kind/operation pairs are currently provided by any loaded addon.
+    /// Cached briefly so a frontend mount that fans out widgets does not hammer the host.
+    /// </summary>
+    [HttpGet("capabilities")]
+    [ResponseCache(Duration = 30)]
+    public IActionResult Capabilities()
+    {
+        var streamAddons = addonHost.StreamSourceAddons;
+
+        bool StreamSupports(AddonMediaKind kind) =>
+            streamAddons.Any(a => a.Supports(kind));
+
+        // For now download capability mirrors stream capability; we'll refine once
+        // direct-mp4 addons are distinguishable from iframe-only addons at runtime.
+        var capabilities = new
+        {
+            video  = new { stream = StreamSupports(AddonMediaKind.Movie) || StreamSupports(AddonMediaKind.Series),
+                           download = StreamSupports(AddonMediaKind.Movie) || StreamSupports(AddonMediaKind.Series) },
+            movie  = new { stream = StreamSupports(AddonMediaKind.Movie),  download = StreamSupports(AddonMediaKind.Movie) },
+            series = new { stream = StreamSupports(AddonMediaKind.Series), download = StreamSupports(AddonMediaKind.Series) },
+            anime  = new { stream = StreamSupports(AddonMediaKind.Movie) || StreamSupports(AddonMediaKind.Series),
+                           download = StreamSupports(AddonMediaKind.Movie) || StreamSupports(AddonMediaKind.Series) },
+            manga  = new { stream = StreamSupports(AddonMediaKind.Manga), download = StreamSupports(AddonMediaKind.Manga) },
+            book   = new { stream = StreamSupports(AddonMediaKind.Book),  download = StreamSupports(AddonMediaKind.Book) },
+        };
+
+        return Ok(capabilities);
+    }
+
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
     {

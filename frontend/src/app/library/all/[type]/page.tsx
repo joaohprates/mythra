@@ -6,31 +6,34 @@ import { Topbar } from "@/components/shell/Topbar";
 import { PageScaffold } from "@/components/shell/PageScaffold";
 import { MediaCard } from "@/components/media/MediaCard";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/store/locale";
 import type { MediaItem, MediaKind, PagedResult } from "@/lib/types";
+import type { TranslationKey } from "@/lib/i18n";
 
-const KIND_LABELS: Record<string, string> = {
-  Video: "Movies & TV",
-  Manga: "Manga",
-  Book: "Books",
-  Audio: "Audiobooks",
+const KIND_LABEL_KEYS: Record<string, TranslationKey> = {
+  Video: "kind.video",
+  Manga: "kind.manga",
+  Book:  "kind.book",
 };
 
 export default function LibraryByTypePage() {
   const params = useParams<{ type: string }>();
   const kind = params.type as MediaKind;
+  const t = useTranslation();
 
   const items = useQuery({
     queryKey: ["library", "all", kind],
     queryFn: async () => {
       const res = await api.get<PagedResult<MediaItem>>("/items", {
-        params: { kind, take: 200 },
+        params: { kind, take: 200, includeAdult: true },
       });
       return res.data;
     },
     enabled: !!kind,
   });
 
-  const label = KIND_LABELS[kind] ?? kind;
+  const labelKey = KIND_LABEL_KEYS[kind];
+  const label = labelKey ? t(labelKey) : kind;
 
   return (
     <>
@@ -41,12 +44,12 @@ export default function LibraryByTypePage() {
         </h1>
         <p className="text-sm text-mythra-text-muted">
           {items.data
-            ? `${items.data.total} item${items.data.total !== 1 ? "s" : ""}`
-            : "Loading…"}
+            ? t(items.data.total === 1 ? "library.itemCount" : "library.itemsCount", { count: String(items.data.total) })
+            : t("common.loading")}
         </p>
 
         {items.isLoading && (
-          <div className="mt-16 text-center text-mythra-text-muted text-sm">Loading…</div>
+          <div className="mt-16 text-center text-mythra-text-muted text-sm">{t("common.loading")}</div>
         )}
 
         <div className="mt-8 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-5">
@@ -57,13 +60,13 @@ export default function LibraryByTypePage() {
 
         {!items.isLoading && (items.data?.items.length ?? 0) === 0 && (
           <div className="mt-24 text-center text-mythra-text-muted text-sm">
-            No {label.toLowerCase()} yet.{" "}
+            {t("library.empty.cross", { kind: label.toLowerCase() })}{" "}
             <a href="/discover" className="text-mythra-purple underline-offset-2 hover:underline">
-              Discover &amp; import content
+              {t("library.empty.discover")}
             </a>
-            {" "}or add a local library in{" "}
+            {" "}{t("library.empty.or")}{" "}
             <a href="/settings#libraries" className="text-mythra-purple underline-offset-2 hover:underline">
-              Settings → Libraries
+              {t("library.empty.localCta")}
             </a>
             .
           </div>

@@ -4,7 +4,6 @@ using Mythra.Application.Dtos.Media;
 using Mythra.Application.Mapping;
 using Mythra.Domain.Common;
 using Mythra.Domain.Media;
-using Mythra.Domain.Media.Audio;
 using Mythra.Domain.Media.Books;
 using Mythra.Domain.Media.Manga;
 using Mythra.Domain.Media.Video;
@@ -16,7 +15,6 @@ public sealed class MediaService(
     IVideoRepository videos,
     IMangaRepository mangas,
     IBookRepository books,
-    IAudioRepository audios,
     IGenreRepository genres,
     IUnitOfWork uow) : IMediaService
 {
@@ -48,7 +46,6 @@ public sealed class MediaService(
             VideoItem v => await LoadVideoDetailAsync(v, ct),
             MangaItem m => await LoadMangaDetailAsync(m, ct),
             BookItem b => await LoadBookDetailAsync(b, ct),
-            AudioItem a => await LoadAudioDetailAsync(a, ct),
             _ => item.ToSummary(),
         };
         return dto;
@@ -88,12 +85,6 @@ public sealed class MediaService(
     private async Task<BookItemDto> LoadBookDetailAsync(BookItem b, CancellationToken ct)
     {
         var hydrated = await books.GetByIdWithChaptersAsync(b.Id, ct) ?? b;
-        return hydrated.ToDetail();
-    }
-
-    private async Task<AudioItemDto> LoadAudioDetailAsync(AudioItem a, CancellationToken ct)
-    {
-        var hydrated = await audios.GetByIdWithChaptersAsync(a.Id, ct) ?? a;
         return hydrated.ToDetail();
     }
 

@@ -14,7 +14,6 @@ public sealed class GeneralLibraryScanner(
     VideoLibraryScanner videoScanner,
     BookLibraryScanner bookScanner,
     MangaLibraryScanner mangaScanner,
-    AudioLibraryScanner audioScanner,
     ILogger<GeneralLibraryScanner> log) : IMediaScanner
 {
     public LibraryKind Kind => LibraryKind.General;
@@ -31,7 +30,6 @@ public sealed class GeneralLibraryScanner(
             (videoScanner, "Video"),
             (bookScanner,  "Book"),
             (mangaScanner, "Manga"),
-            (audioScanner, "Audio"),
         };
 
         log.LogInformation("GeneralLibraryScanner running {Count} sub-scanners on library {Id}", subScanners.Length, libraryId);

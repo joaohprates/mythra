@@ -1,5 +1,4 @@
 using Mythra.Domain.Media;
-using Mythra.Domain.Media.Audio;
 using Mythra.Domain.Media.Books;
 using Mythra.Domain.Media.Manga;
 using Mythra.Domain.Media.Video;
@@ -47,11 +46,6 @@ public interface IBookRepository : IRepository<BookItem>
 {
     Task<BookItem?> GetByIdWithChaptersAsync(Guid id, CancellationToken ct = default);
     Task<BookItem?> GetByPathAsync(string path, CancellationToken ct = default);
-}
-
-public interface IAudioRepository : IRepository<AudioItem>
-{
-    Task<AudioItem?> GetByIdWithChaptersAsync(Guid id, CancellationToken ct = default);
 }
 
 public interface IGenreRepository : IRepository<Genre>

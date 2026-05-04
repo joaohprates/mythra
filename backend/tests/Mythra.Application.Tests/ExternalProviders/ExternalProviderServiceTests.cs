@@ -16,7 +16,21 @@ public sealed class ExternalProviderServiceTests
         IMediaItemRepository             repo,
         IEnumerable<IExternalVideoProvider> videoProviders,
         IEnumerable<IExternalBookProvider>? bookProviders = null)
-        => new(videoProviders, bookProviders ?? [], repo);
+        => new(videoProviders, bookProviders ?? [], new EmptyStreamRegistry(), new EmptyBookRegistry(), repo);
+
+    private sealed class EmptyStreamRegistry : IAddonStreamSourceRegistry
+    {
+        public void Register(string addonId, IExternalVideoProvider provider) { }
+        public void Unregister(string addonId) { }
+        public IReadOnlyList<IExternalVideoProvider> GetAll() => [];
+    }
+
+    private sealed class EmptyBookRegistry : IAddonBookSourceRegistry
+    {
+        public void Register(string addonId, IExternalBookProvider provider) { }
+        public void Unregister(string addonId) { }
+        public IReadOnlyList<IExternalBookProvider> GetAll() => [];
+    }
 
     private static VideoItem MakeVideoItem(string? imdbId = "tt1234567", string title = "Test Movie")
     {
@@ -208,7 +222,7 @@ public sealed class ExternalProviderServiceTests
                 new("ProviderB", ExternalBookFormat.PlainText, "https://b.example.com/book.txt"),
             });
 
-        var sut    = new ExternalProviderService([], [providerA.Object, providerB.Object], repo.Object);
+        var sut    = new ExternalProviderService([], [providerA.Object, providerB.Object], new EmptyStreamRegistry(), new EmptyBookRegistry(), repo.Object);
         var result = await sut.GetBookLinksAsync(item.Id);
 
         result.IsSuccess.Should().BeTrue();

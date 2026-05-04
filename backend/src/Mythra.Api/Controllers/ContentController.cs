@@ -14,7 +14,6 @@ namespace Mythra.Api.Controllers;
 public sealed class ContentController(
     IMangaRepository mangas,
     IBookRepository books,
-    IAudioRepository audios,
     ILogger<ContentController> log) : ControllerBase
 {
     private static readonly string[] ImageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"];
@@ -192,29 +191,6 @@ public sealed class ContentController(
             "<a$1$2>", RegexOptions.IgnoreCase);
 
         return html;
-    }
-
-    [HttpGet("chapters/{chapterId:guid}/stream")]
-    [AllowAnonymous]
-    public async Task<IActionResult> StreamAudioChapter(Guid mediaItemId, Guid chapterId, CancellationToken ct)
-    {
-        var audio = await audios.GetByIdWithChaptersAsync(mediaItemId, ct);
-        if (audio is null) return NotFound();
-        var chapter = audio.Chapters.FirstOrDefault(c => c.Id == chapterId);
-        if (chapter is null || !System.IO.File.Exists(chapter.FilePath)) return NotFound();
-
-        var contentType = chapter.FilePath.ToLowerInvariant() switch
-        {
-            var s when s.EndsWith(".mp3") => "audio/mpeg",
-            var s when s.EndsWith(".m4a") || s.EndsWith(".m4b") || s.EndsWith(".aac") => "audio/aac",
-            var s when s.EndsWith(".flac") => "audio/flac",
-            var s when s.EndsWith(".ogg") || s.EndsWith(".opus") => "audio/ogg",
-            var s when s.EndsWith(".wav") => "audio/wav",
-            _ => "application/octet-stream",
-        };
-
-        await Task.CompletedTask;
-        return PhysicalFile(chapter.FilePath, contentType, enableRangeProcessing: true);
     }
 
     private static string ContentTypeFor(string filename) => Path.GetExtension(filename).ToLowerInvariant() switch

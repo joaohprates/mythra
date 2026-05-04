@@ -34,7 +34,7 @@ const SECTION_ICONS: Record<SectionId, React.ReactNode> = {
   account:   <Settings2 size={15} />,
 };
 
-const LIBRARY_KINDS = ["Video", "Anime", "Manga", "Book", "Audiobook", "Music", "General"];
+const LIBRARY_KINDS = ["Video", "Anime", "Manga", "Book", "General"];
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -479,17 +479,17 @@ function ProfilesSection({ user }: { user: { id?: string; profiles?: Profile[] }
       setCreating(false);
       setNewName("");
       setIsKid(false);
-    } catch { setError("Failed to create profile."); }
+    } catch { setError(t("settings.profiles.createFailed")); }
   };
 
   const deleteProfile = async (profileId: string) => {
-    if (!confirm("Delete this profile? This will remove all watch history and preferences.")) return;
+    if (!confirm(t("settings.profiles.deleteConfirm"))) return;
     try {
       await api.delete(`/auth/profiles/${profileId}`);
       const me = (await api.get("/auth/me")).data;
       setUser(me);
       qc.invalidateQueries({ queryKey: ["me"] });
-    } catch { setError("Failed to delete profile."); }
+    } catch { setError(t("settings.profiles.deleteFailed")); }
   };
 
   return (
@@ -523,7 +523,7 @@ function ProfilesSection({ user }: { user: { id?: string; profiles?: Profile[] }
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder={t("settings.profiles.title")}
+                placeholder={t("settings.profiles.namePh")}
                 className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm outline-none placeholder:text-white/30"
               />
               <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -610,7 +610,7 @@ function AddonsSection() {
       qc.invalidateQueries({ queryKey: ["addons"] });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail;
-      setImportError(msg ?? "Import failed. Check the file format.");
+      setImportError(msg ?? t("settings.addons.importFailed"));
     } finally {
       setImporting(false);
       e.target.value = "";
@@ -626,22 +626,22 @@ function AddonsSection() {
       a.download = `${name.replace(/\s+/g, "-")}.mythra-addon.json`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch { alert("Export failed."); }
+    } catch { alert(t("settings.addons.exportFailed")); }
   };
 
   const toggleAddon = async (id: string) => {
     try {
       await api.patch(`/addons/${id}/toggle`);
       qc.invalidateQueries({ queryKey: ["addons"] });
-    } catch { alert("Failed to toggle addon."); }
+    } catch { alert(t("settings.addons.toggleFailed")); }
   };
 
   const deleteAddon = async (id: string, name: string) => {
-    if (!confirm(`Remove addon "${name}"?`)) return;
+    if (!confirm(t("settings.addons.removeConfirm", { name }))) return;
     try {
       await api.delete(`/addons/${id}`);
       qc.invalidateQueries({ queryKey: ["addons"] });
-    } catch { alert("Failed to remove addon."); }
+    } catch { alert(t("settings.addons.removeFailed")); }
   };
 
   return (
@@ -650,11 +650,11 @@ function AddonsSection() {
         <div>
           <h2 className="text-lg font-semibold">{t("settings.nav.addons")}</h2>
           <p className="text-sm text-mythra-text-muted mt-1">
-            Import and export reusable media source configurations.
+            {t("settings.addons.subtitle")}
           </p>
         </div>
         <label className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-gradient-to-r from-mythra-purple to-mythra-blue px-4 py-2 text-xs font-medium text-white">
-          <Upload size={14} /> {importing ? t("action.importing") : t("action.import") + " addon"}
+          <Upload size={14} /> {importing ? t("action.importing") : t("settings.addons.import")}
           <input type="file" accept=".json,.mythra-addon.json" onChange={handleFileImport} className="hidden" disabled={importing} />
         </label>
       </div>
@@ -670,9 +670,9 @@ function AddonsSection() {
       {!addons.isLoading && (addons.data?.length ?? 0) === 0 && (
         <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center">
           <Package size={32} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm text-mythra-text-muted">No addons installed.</p>
+          <p className="text-sm text-mythra-text-muted">{t("settings.addons.empty")}</p>
           <p className="mt-1 text-xs text-mythra-text-soft">
-            Import a <code className="rounded bg-white/10 px-1">.mythra-addon.json</code> file shared by another user.
+            {t("settings.addons.emptyHint")}
           </p>
         </div>
       )}
@@ -723,6 +723,7 @@ function AddonsSection() {
 
 function LanguageSection() {
   const user = useAuthStore((s) => s.user);
+  const t = useTranslation();
   const [profileId] = useState<string | null>(user?.profiles?.[0]?.id ?? null);
   const [contentLang, setContentLang] = useState("");
   const [subtitleLang, setSubtitleLang] = useState("");
@@ -784,8 +785,8 @@ function LanguageSection() {
     <div className="rounded-3xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur space-y-6">
       {/* App interface language */}
       <div>
-        <h2 className="text-lg font-semibold">Interface Language</h2>
-        <p className="mt-1 text-sm text-mythra-text-muted">Language used throughout the Mythra interface.</p>
+        <h2 className="text-lg font-semibold">{t("settings.interfaceLang")}</h2>
+        <p className="mt-1 text-sm text-mythra-text-muted">{t("settings.interfaceLang.body")}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
@@ -813,21 +814,21 @@ function LanguageSection() {
 
       {/* Content language preferences (server-side) */}
       <div>
-        <h2 className="text-lg font-semibold">Content Language Preferences</h2>
-        <p className="mt-1 text-sm text-mythra-text-muted">Control metadata display language and default audio/subtitle tracks.</p>
+        <h2 className="text-lg font-semibold">{t("settings.contentLang")}</h2>
+        <p className="mt-1 text-sm text-mythra-text-muted">{t("settings.contentLang.body")}</p>
       </div>
 
-      {!profileId && <p className="text-sm text-mythra-text-muted">No profile found. Create a profile first in the Profiles section.</p>}
+      {!profileId && <p className="text-sm text-mythra-text-muted">{t("settings.contentLang.noProfile")}</p>}
 
       {profileId && (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
-            <LangSelect label="Metadata language" value={contentLang} onChange={setContentLang} />
-            <LangSelect label="Default subtitle language" value={subtitleLang} onChange={setSubtitleLang} />
-            <LangSelect label="Default audio language" value={audioLang} onChange={setAudioLang} />
+            <LangSelect label={t("settings.contentLang.metadata")} value={contentLang} onChange={setContentLang} />
+            <LangSelect label={t("settings.contentLang.subtitles")} value={subtitleLang} onChange={setSubtitleLang} />
+            <LangSelect label={t("settings.contentLang.audio")} value={audioLang} onChange={setAudioLang} />
             <div className="flex items-center gap-3 pt-6">
               <input id="show-original" type="checkbox" checked={showOriginal} onChange={(e) => setShowOriginal(e.target.checked)} className="h-4 w-4 rounded border border-white/20 bg-transparent accent-purple-500" />
-              <label htmlFor="show-original" className="text-sm text-mythra-text-soft cursor-pointer">Always show original title</label>
+              <label htmlFor="show-original" className="text-sm text-mythra-text-soft cursor-pointer">{t("settings.contentLang.original")}</label>
             </div>
           </div>
           <button
@@ -835,7 +836,7 @@ function LanguageSection() {
             disabled={saving}
             className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-mythra-purple to-mythra-blue px-5 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            {saved ? <><Check size={14} /> Saved!</> : saving ? "Saving…" : "Save preferences"}
+            {saved ? <><Check size={14} /> {t("settings.contentLang.saved")}</> : saving ? t("settings.contentLang.saving") : t("settings.contentLang.save")}
           </button>
         </>
       )}
@@ -931,7 +932,6 @@ function MetadataSection() {
         { name: "TMDB", desc: "Movies & TV shows", env: "Metadata__TmdbApiKey", badge: "Video" },
         { name: "AniList", desc: "Anime & Manga", env: "— (no key needed)", badge: "Anime / Manga" },
         { name: "Open Library", desc: "Books & eBooks", env: "— (no key needed)", badge: "Book" },
-        { name: "Spotify", desc: "Music & Audiobooks", env: "Metadata__SpotifyClientId", badge: "Audio" },
       ].map((p) => (
         <div key={p.name} className="flex items-center gap-3 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4">
           <div className="flex-1">
@@ -1035,7 +1035,7 @@ function AccountSection({ user, onSignOut }: { user: { email?: string; username?
       setUser(res.data);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch { setError("Failed to update account."); }
+    } catch { setError(t("settings.account.failed")); }
     finally { setSaving(false); }
   };
 
@@ -1043,7 +1043,7 @@ function AccountSection({ user, onSignOut }: { user: { email?: string; username?
     <div className="rounded-3xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur space-y-6">
       <div>
         <h2 className="text-lg font-semibold">{t("settings.account")}</h2>
-        <p className="mt-1 text-sm text-mythra-text-muted">Manage your account details.</p>
+        <p className="mt-1 text-sm text-mythra-text-muted">{t("settings.account.subtitle")}</p>
       </div>
 
       {error && (

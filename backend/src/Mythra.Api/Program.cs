@@ -61,8 +61,24 @@ builder.Services.AddCors(opt =>
 
 // ================= JWT =================
 var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
-if (string.IsNullOrWhiteSpace(jwt.Secret) || jwt.Secret.Length < 32)
-    jwt.Secret = "dev-only-secret-please-change-me-32-chars-min!";
+const string DevFallbackJwtSecret = "mythra-development-only-secret-do-not-use-in-production-0000000000";
+if (string.IsNullOrWhiteSpace(jwt.Secret))
+{
+    if (builder.Environment.IsProduction())
+    {
+        throw new InvalidOperationException(
+            "Jwt:Secret is not configured. Set the 'Jwt__Secret' environment variable (or 'Jwt:Secret' in configuration) to a value of at least 32 characters before starting in Production.");
+    }
+    jwt.Secret = DevFallbackJwtSecret;
+    Console.WriteLine("[Mythra][WARN] Jwt:Secret missing — using deterministic development fallback. Configure 'Jwt__Secret' for non-dev runs.");
+}
+if (jwt.Secret.Length < 32)
+{
+    throw new InvalidOperationException(
+        $"Jwt:Secret is too short ({jwt.Secret.Length} chars). It must be at least 32 characters. Set the 'Jwt__Secret' environment variable.");
+}
+// Push the resolved secret back into configuration so downstream services (token issuer) see it.
+builder.Configuration["Jwt:Secret"] = jwt.Secret;
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -230,6 +246,43 @@ static async Task ApplySchemaDeltasAsync(MythraDbContext db)
     await db.Database.ExecuteSqlRawAsync(@"
         CREATE INDEX IF NOT EXISTS IX_favorite_items_ProfileId
         ON favorite_items (ProfileId)");
+
+    // playlists / playlist_items — created here so existing DBs predating the feature get the tables.
+    await db.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS playlists (
+            Id TEXT NOT NULL CONSTRAINT PK_playlists PRIMARY KEY,
+            ProfileId TEXT NOT NULL,
+            Name TEXT NOT NULL,
+            Description TEXT NULL,
+            IsPublic INTEGER NOT NULL DEFAULT 0,
+            CoverImagePath TEXT NULL,
+            CreatedAt INTEGER NOT NULL,
+            UpdatedAt INTEGER NULL
+        )");
+
+    await db.Database.ExecuteSqlRawAsync(@"
+        CREATE INDEX IF NOT EXISTS IX_playlists_ProfileId ON playlists (ProfileId)");
+
+    await db.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS playlist_items (
+            Id TEXT NOT NULL CONSTRAINT PK_playlist_items PRIMARY KEY,
+            PlaylistId TEXT NOT NULL,
+            MediaItemId TEXT NOT NULL,
+            ""Order"" INTEGER NOT NULL,
+            AddedAt INTEGER NOT NULL,
+            CreatedAt INTEGER NOT NULL,
+            UpdatedAt INTEGER NULL,
+            CONSTRAINT FK_playlist_items_playlists_PlaylistId
+                FOREIGN KEY (PlaylistId) REFERENCES playlists (Id) ON DELETE CASCADE
+        )");
+
+    await db.Database.ExecuteSqlRawAsync(@"
+        CREATE INDEX IF NOT EXISTS IX_playlist_items_PlaylistId_Order
+        ON playlist_items (PlaylistId, ""Order"")");
+
+    await db.Database.ExecuteSqlRawAsync(@"
+        CREATE UNIQUE INDEX IF NOT EXISTS IX_playlist_items_PlaylistId_MediaItemId
+        ON playlist_items (PlaylistId, MediaItemId)");
 }
 
 // ================= BOOTSTRAP =================

@@ -11,6 +11,7 @@ using Mythra.Addons.Contracts.Models;
 using Mythra.Application.Abstractions.Addons;
 using Mythra.Application.Abstractions.Metadata;
 using Mythra.Application.Abstractions.Persistence;
+using Mythra.Application.Abstractions.Providers;
 
 namespace Mythra.Infrastructure.Addons;
 
@@ -28,6 +29,8 @@ public sealed class AddonHost(
     IMemoryCache cache,
     IHttpClientFactory httpClientFactory,
     IMetadataProviderRegistry metadataRegistry,
+    IAddonStreamSourceRegistry streamSourceRegistry,
+    IAddonBookSourceRegistry bookSourceRegistry,
     IServiceScopeFactory scopeFactory)
     : IAddonHost, IHostedService, IAsyncDisposable
 {
@@ -196,6 +199,9 @@ public sealed class AddonHost(
         // Deregister from registries first
         if (entry.Addon is IMetadataAddon)
             metadataRegistry.Unregister(addonId);
+        if (entry.Addon is IStreamSourceAddon)
+            streamSourceRegistry.Unregister(addonId);
+        bookSourceRegistry.Unregister(addonId);
 
         try { await entry.Addon.DisposeAsync(); }
         catch (Exception ex) { _log.LogWarning(ex, "Error disposing addon {Id}.", addonId); }
@@ -213,7 +219,14 @@ public sealed class AddonHost(
             var bridge = new AddonMetadataBridge(metaAddon, loggerFactory.CreateLogger($"AddonBridge.{addonId}"));
             metadataRegistry.Register(bridge);
         }
-        // TODO: register IStreamSourceAddon and ISubtitleAddon in their own registries
+
+        if (addon is IStreamSourceAddon streamAddon)
+        {
+            var bridge = new AddonStreamSourceBridge(streamAddon, loggerFactory.CreateLogger($"AddonStreamBridge.{addonId}"));
+            streamSourceRegistry.Register(addonId, bridge);
+        }
+
+        // ISubtitleAddon: registry pending — addon is still discovered via IAddonHost.SubtitleAddons.
     }
 
     private async Task<(string configJson, string? secretsJson)> LoadAddonStorageAsync(

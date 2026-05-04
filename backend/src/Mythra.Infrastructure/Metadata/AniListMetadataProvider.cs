@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Mythra.Application.Abstractions.Metadata;
@@ -9,10 +10,12 @@ namespace Mythra.Infrastructure.Metadata;
 
 public sealed class AniListMetadataProvider(
     HttpClient http,
+    IMemoryCache cache,
     IOptions<MetadataOptions> opts,
     ILogger<AniListMetadataProvider> log) : IMetadataProvider
 {
     private readonly MetadataOptions _opts = opts.Value;
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(10);
 
     public string Name => "anilist";
 
@@ -48,9 +51,9 @@ public sealed class AniListMetadataProvider(
 
         try
         {
-            var response = await http.PostAsJsonAsync(_opts.AniListBaseUrl, graphql, ct);
-            if (!response.IsSuccessStatusCode) return [];
-            var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+            var jsonStr = await PostCachedAsync($"search:{type}:{query}:{year}", graphql, ct);
+            if (jsonStr is null) return [];
+            var json = JsonSerializer.Deserialize<JsonElement>(jsonStr);
             var media = json.GetProperty("data").GetProperty("Page").GetProperty("media");
             var results = new List<MetadataSearchResult>();
             foreach (var m in media.EnumerateArray()) results.Add(Map(m));
@@ -87,9 +90,9 @@ public sealed class AniListMetadataProvider(
 
         try
         {
-            var response = await http.PostAsJsonAsync(_opts.AniListBaseUrl, graphql, ct);
-            if (!response.IsSuccessStatusCode) return null;
-            var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+            var jsonStr = await PostCachedAsync($"id:{type}:{id}", graphql, ct);
+            if (jsonStr is null) return null;
+            var json = JsonSerializer.Deserialize<JsonElement>(jsonStr);
             return Map(json.GetProperty("data").GetProperty("Media"));
         }
         catch (Exception ex)
@@ -97,6 +100,17 @@ public sealed class AniListMetadataProvider(
             log.LogWarning(ex, "AniList fetch failed for {Id}", providerId);
             return null;
         }
+    }
+
+    private async Task<string?> PostCachedAsync(string cacheSuffix, object graphql, CancellationToken ct)
+    {
+        var key = $"anilist:{cacheSuffix}";
+        if (cache.TryGetValue(key, out string? json) && json is not null) return json;
+        var response = await http.PostAsJsonAsync(_opts.AniListBaseUrl, graphql, ct);
+        if (!response.IsSuccessStatusCode) return null;
+        json = await response.Content.ReadAsStringAsync(ct);
+        cache.Set(key, json, CacheTtl);
+        return json;
     }
 
     private static MetadataSearchResult Map(JsonElement m)

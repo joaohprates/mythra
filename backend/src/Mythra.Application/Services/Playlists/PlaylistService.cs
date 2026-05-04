@@ -49,6 +49,11 @@ public sealed class PlaylistService(
         {
             return Error.Validation(ex.Message);
         }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Failed to create playlist '{Name}' for profile {ProfileId}", req.Name, profileId);
+            return Error.Internal($"Failed to create playlist: {ex.GetBaseException().Message}");
+        }
     }
 
     public async Task<Result<PlaylistDetailDto>> UpdateAsync(Guid id, Guid profileId, UpdatePlaylistRequest req, CancellationToken ct = default)

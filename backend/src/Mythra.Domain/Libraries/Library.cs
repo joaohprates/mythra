@@ -60,15 +60,12 @@ public sealed class Library : AggregateRoot
             [".epub", ".pdf", ".mobi", ".azw3", ".fb2", ".txt"],
         LibraryKind.Manga =>
             [".cbz", ".cbr", ".cb7"],
-        LibraryKind.Audiobook or LibraryKind.Music =>
-            [".mp3", ".flac", ".m4a", ".ogg", ".wav", ".opus", ".aac", ".m4b"],
         LibraryKind.Image =>
             [".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".bmp", ".tiff"],
         LibraryKind.General =>
             [".mp4", ".mkv", ".m4v", ".mov", ".avi", ".webm", ".ts",
              ".epub", ".pdf", ".mobi", ".azw3", ".fb2",
              ".cbz", ".cbr", ".cb7",
-             ".mp3", ".flac", ".m4a", ".ogg", ".wav", ".opus", ".aac", ".m4b",
              ".jpg", ".jpeg", ".png", ".gif", ".webp"],
         _ => [],
     };

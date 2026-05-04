@@ -1,5 +1,4 @@
 using Mythra.Domain.Media;
-using Mythra.Domain.Media.Audio;
 using Mythra.Domain.Media.Books;
 using Mythra.Domain.Media.Manga;
 using Mythra.Domain.Media.Video;
@@ -107,23 +106,5 @@ public sealed record BookItemDto(
     bool IsExternal = false);
 
 public sealed record BookChapterDto(Guid Id, int Order, string Title, string? Anchor, int? StartPage, int? EndPage);
-
-public sealed record AudioItemDto(
-    Guid Id,
-    Guid LibraryId,
-    string Title,
-    string? Author,
-    string? Narrator,
-    string? Series,
-    int? SeriesIndex,
-    AudioKind AudioKind,
-    TimeSpan? Duration,
-    string? CoverPath,
-    string? Overview,
-    IReadOnlyList<AudioChapterDto> Chapters,
-    string Kind = "Audio",
-    bool IsExternal = false);
-
-public sealed record AudioChapterDto(Guid Id, int Order, string Title, TimeSpan Start, TimeSpan Duration);
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Skip, int Take);

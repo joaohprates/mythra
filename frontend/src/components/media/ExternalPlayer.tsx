@@ -2,8 +2,10 @@
 
 import { motion } from "framer-motion";
 import { ExternalLink, Loader2, AlertTriangle } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/store/locale";
 
 interface ExternalStreamDto {
   providerName: string;
@@ -27,13 +29,16 @@ interface Props {
  * - DirectMp4    → <video> element
  */
 export function ExternalPlayer({ mediaItemId, season, episode, title }: Props) {
+  const t = useTranslation();
   const [stream, setStream] = useState<ExternalStreamDto | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
+    setNotFound(false);
     const params: Record<string, string | number> = {};
     if (season != null) params.season = season;
     if (episode != null) params.episode = episode;
@@ -41,7 +46,10 @@ export function ExternalPlayer({ mediaItemId, season, episode, title }: Props) {
     api
       .get<ExternalStreamDto>(`/stream/external/${mediaItemId}`, { params })
       .then((r) => setStream(r.data))
-      .catch(() => setError("No external stream available for this title right now."))
+      .catch((err: { response?: { status?: number } }) => {
+        if (err?.response?.status === 404) setNotFound(true);
+        else setError("Stream unavailable. Try again later.");
+      })
       .finally(() => setLoading(false));
   }, [mediaItemId, season, episode]);
 
@@ -49,6 +57,22 @@ export function ExternalPlayer({ mediaItemId, season, episode, title }: Props) {
     return (
       <div className="flex aspect-video w-full items-center justify-center rounded-3xl bg-black/60">
         <Loader2 size={32} className="animate-spin text-mythra-purple" />
+      </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 rounded-3xl border border-mythra-purple/20 bg-black/60 px-6 text-center text-mythra-text-muted">
+        <AlertTriangle size={32} className="text-amber-400" />
+        <p className="text-base font-semibold text-white">{t("stream.noProvider.title")}</p>
+        <p className="text-sm">{t("stream.noProvider.body")}</p>
+        <Link
+          href="/settings#addons"
+          className="mt-2 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-mythra-purple to-mythra-blue px-5 py-2 text-xs font-medium text-white"
+        >
+          {t("stream.noProvider.cta")}
+        </Link>
       </div>
     );
   }

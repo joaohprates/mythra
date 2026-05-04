@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import { heroBackdrop, overlayGradient } from "@/lib/motion";
 import { cleanDescription } from "@/lib/text";
 import type { MediaItem } from "@/lib/types";
+import { SmartImage } from "@/components/ui/SmartImage";
+import { useTranslation } from "@/store/locale";
 
 interface Props {
   items: MediaItem[];
@@ -15,6 +17,7 @@ interface Props {
 
 export function HeroBanner({ items, intervalMs = 8000 }: Props) {
   const [index, setIndex] = useState(0);
+  const t = useTranslation();
 
   useEffect(() => {
     if (items.length <= 1) return;
@@ -37,12 +40,12 @@ export function HeroBanner({ items, intervalMs = 8000 }: Props) {
           className="absolute inset-0"
         >
           {current.backdropPath ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <SmartImage
               src={current.backdropPath}
               alt=""
               className="h-full w-full object-cover"
               loading="eager"
+              fallbackKind="backdrop"
             />
           ) : (
             <div className="h-full w-full bg-gradient-to-br from-[#1a1d35] via-[#11132a] to-[#070811]" />
@@ -65,7 +68,7 @@ export function HeroBanner({ items, intervalMs = 8000 }: Props) {
           >
             <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 backdrop-blur px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-mythra-text-soft">
               <span className="h-1.5 w-1.5 rounded-full bg-mythra-purple shadow-[0_0_12px_rgba(168,85,247,0.9)]" />
-              {current.kind === "Video" ? "Featured" : current.kind}
+              {current.kind === "Video" ? t("hero.featured") : current.kind}
             </span>
             <h1 className="mt-4 text-4xl font-bold tracking-tight md:text-6xl lg:text-7xl">
               <span className="gradient-text">{current.title}</span>
@@ -84,13 +87,13 @@ export function HeroBanner({ items, intervalMs = 8000 }: Props) {
                 href={primaryHref(current)}
                 className="group inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black shadow-[0_18px_50px_-15px_rgba(255,255,255,0.5)] transition hover:scale-[1.03] hover:shadow-[0_22px_55px_-15px_rgba(255,255,255,0.7)]"
               >
-                <Play size={16} className="fill-current" /> Play now
+                <Play size={16} className="fill-current" /> {t("hero.play")}
               </Link>
               <Link
                 href={`/item/${current.id}`}
                 className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-6 py-3 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/[0.12]"
               >
-                <Info size={16} /> More info
+                <Info size={16} /> {t("hero.info")}
               </Link>
             </div>
           </motion.div>
@@ -130,8 +133,6 @@ function primaryHref(item: MediaItem): string {
     case "Manga":
     case "Book":
       return `/read/${item.id}`;
-    case "Audio":
-      return `/listen/${item.id}`;
     default:
       return `/item/${item.id}`;
   }

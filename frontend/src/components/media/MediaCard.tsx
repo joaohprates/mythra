@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Heart, MoreVertical, ListPlus, Trash2, Library } from "lucide-react";
+import { Play, Heart, MoreVertical, ListPlus, Trash2, Library, Lock } from "lucide-react";
 import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,6 +13,7 @@ import { cleanDescription } from "@/lib/text";
 import { useAuthStore } from "@/store/auth";
 import { useProfilePrefs } from "@/store/profile";
 import { useTranslation } from "@/store/locale";
+import { SmartImage } from "@/components/ui/SmartImage";
 
 type Item = MediaItem | SearchHit;
 
@@ -33,6 +34,12 @@ export function MediaCard({ item, size = "md", showOverview = false, showActions
   const poster   = item.posterPath ?? null;
   const subtitle = "subtitle" in item ? item.subtitle : item.year ? String(item.year) : null;
   const overview = "overview" in item ? item.overview : null;
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [adultRevealed, setAdultRevealed] = useState(false);
+  const { showAdultContent } = useProfilePrefs();
+  const t = useTranslation();
+  const isAdult = "isAdult" in item && item.isAdult === true;
+  const isBlurred = isAdult && !showAdultContent && !adultRevealed;
 
   return (
     <motion.div
@@ -42,6 +49,11 @@ export function MediaCard({ item, size = "md", showOverview = false, showActions
       whileTap="tap"
       animate="rest"
       className={cn("relative gpu group", sizes[size])}
+      onContextMenu={(e) => {
+        if (!("libraryId" in item)) return;
+        e.preventDefault();
+        setCtxMenu({ x: e.clientX, y: e.clientY });
+      }}
     >
       <Link href={hrefFor(item)} className="block">
         <div
@@ -52,12 +64,16 @@ export function MediaCard({ item, size = "md", showOverview = false, showActions
           )}
         >
           {poster ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <SmartImage
               src={poster}
               alt={item.title}
               loading="lazy"
-              className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-110"
+              fallbackKind="poster"
+              className={cn(
+                "absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-110",
+                isBlurred && "scale-110"
+              )}
+              style={isBlurred ? { filter: "blur(24px) brightness(0.6)" } : undefined}
             />
           ) : (
             <div className="absolute inset-0 grid place-items-center text-mythra-text-soft">
@@ -65,29 +81,31 @@ export function MediaCard({ item, size = "md", showOverview = false, showActions
             </div>
           )}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent opacity-90 transition-opacity duration-300 group-hover:opacity-100" />
-          <div className="absolute inset-x-0 bottom-0 p-4">
-            <div className="flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-white">{item.title}</p>
-                {subtitle && <p className="truncate text-xs text-mythra-text-soft">{subtitle}</p>}
+          {!isBlurred && (
+            <div className="absolute inset-x-0 bottom-0 p-4">
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-white">{item.title}</p>
+                  {subtitle && <p className="truncate text-xs text-mythra-text-soft">{subtitle}</p>}
+                </div>
+                <motion.span
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.94 }}
+                  className="grid h-9 w-9 place-items-center rounded-full bg-white text-black shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                >
+                  <Play size={16} />
+                </motion.span>
               </div>
-              <motion.span
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.94 }}
-                className="grid h-9 w-9 place-items-center rounded-full bg-white text-black shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-              >
-                <Play size={16} />
-              </motion.span>
+              {showOverview && overview && (
+                <p className="mt-2 line-clamp-2 text-xs text-mythra-text-soft">{cleanDescription(overview)}</p>
+              )}
             </div>
-            {showOverview && overview && (
-              <p className="mt-2 line-clamp-2 text-xs text-mythra-text-soft">{cleanDescription(overview)}</p>
-            )}
-          </div>
+          )}
           <KindBadge kind={item.kind} />
-          {"isAdult" in item && item.isAdult && (
+          {isAdult && !isBlurred && (
             <AdultBadge />
           )}
-          {"rating" in item && item.rating ? (
+          {"rating" in item && item.rating && !isBlurred ? (
             <span className="absolute right-2 top-2 rounded-full bg-black/60 backdrop-blur px-2 py-0.5 text-[11px] font-semibold text-amber-200">
               {item.rating.toFixed(1)}
             </span>
@@ -95,10 +113,137 @@ export function MediaCard({ item, size = "md", showOverview = false, showActions
         </div>
       </Link>
 
+      {isBlurred && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-2xl bg-black/40">
+          <Lock size={22} className="text-white/80" />
+          <span className="rounded-full border border-red-400/40 bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-red-300">
+            +18
+          </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setAdultRevealed(true);
+            }}
+            className="pointer-events-auto rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-medium text-white backdrop-blur hover:bg-white/20"
+          >
+            {t("discover.adult.show")}
+          </button>
+        </div>
+      )}
+
       {/* Action overlay */}
       {showActions && "libraryId" in item && (
         <CardActions item={item as MediaItem} />
       )}
+      {ctxMenu && "libraryId" in item && (
+        <ContextMenu
+          item={item as MediaItem}
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
+    </motion.div>
+  );
+}
+
+function ContextMenu({
+  item, x, y, onClose,
+}: {
+  item: MediaItem;
+  x: number;
+  y: number;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const activeProfile = useAuthStore((s) => s.activeProfile);
+  const t = useTranslation();
+  const qc = useQueryClient();
+  const profileId = activeProfile?.id ?? null;
+
+  const favoriteQuery = useQuery({
+    queryKey: ["favorite-status", profileId, item.id],
+    queryFn: async () => {
+      if (!profileId) return { isFavorite: false };
+      const res = await api.get<{ isFavorite: boolean }>(`/profiles/${profileId}/favorites/${item.id}/status`);
+      return res.data;
+    },
+    enabled: !!profileId,
+    staleTime: 30_000,
+  });
+  const isFavorite = favoriteQuery.data?.isFavorite ?? false;
+
+  const toggleFavorite = useMutation({
+    mutationFn: async () => {
+      if (!profileId) return;
+      if (isFavorite) {
+        await api.delete(`/profiles/${profileId}/favorites/${item.id}`);
+      } else {
+        await api.post(`/profiles/${profileId}/favorites`, { mediaItemId: item.id });
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["favorite-status", profileId, item.id] });
+      qc.invalidateQueries({ queryKey: ["favorites", profileId] });
+    },
+  });
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  if (!profileId) return null;
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.12 }}
+      className="fixed z-50 w-44 overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f1c] shadow-2xl"
+      style={{ left: x, top: y }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <MenuItem
+        icon={<Heart size={13} className={cn(isFavorite && "fill-current text-red-400")} />}
+        label={isFavorite ? t("action.unfavorite") : t("action.favorite")}
+        onClick={() => { toggleFavorite.mutate(); onClose(); }}
+      />
+      <MenuItem
+        icon={<Library size={13} />}
+        label={t("action.viewInLibrary")}
+        onClick={() => { window.location.href = `/item/${item.id}`; onClose(); }}
+      />
+      <MenuItem
+        icon={<ListPlus size={13} />}
+        label={t("action.addToPlaylist")}
+        onClick={() => { window.location.href = `/playlists`; onClose(); }}
+      />
+      <div className="my-1 h-px bg-white/[0.06]" />
+      <MenuItem
+        icon={<Trash2 size={13} />}
+        label={t("action.removeFromLib")}
+        danger
+        onClick={async () => {
+          if (!confirm(`Remove "${item.title}" from library?`)) return onClose();
+          try {
+            await api.delete(`/items/${item.id}`);
+            qc.invalidateQueries();
+          } catch { /* silently fail for non-admins */ }
+          finally { onClose(); }
+        }}
+      />
     </motion.div>
   );
 }
@@ -253,7 +398,6 @@ function KindBadge({ kind }: { kind: string }) {
     Video: "from-purple-500 to-blue-500",
     Manga: "from-rose-500 to-pink-600",
     Book:  "from-amber-400 to-orange-500",
-    Audio: "from-cyan-400 to-emerald-500",
   };
   return (
     <span
@@ -269,8 +413,6 @@ function KindBadge({ kind }: { kind: string }) {
 }
 
 function AdultBadge() {
-  const { showAdultContent } = useProfilePrefs();
-  if (!showAdultContent) return null;
   return (
     <span className="absolute left-3 top-10 rounded-full border border-red-400/30 bg-red-500/20 px-1.5 py-0.5 text-[9px] font-bold text-red-300 backdrop-blur">
       +18

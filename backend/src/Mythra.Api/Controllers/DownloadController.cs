@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Mythra.Application.Abstractions.Persistence;
 using Mythra.Domain.Media;
-using Mythra.Domain.Media.Audio;
 using Mythra.Domain.Media.Books;
 using Mythra.Domain.Media.Video;
 using System.Text.Json;
@@ -32,7 +31,6 @@ public sealed class DownloadController(
         {
             VideoItem v => v.FilePath,
             BookItem  b => b.FilePath,
-            AudioItem a => a.RootPath, // Audio stores a directory path
             _ => null,
         };
 

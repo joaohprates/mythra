@@ -10,7 +10,6 @@ import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import { VideoPlayer } from "@/components/media/VideoPlayer";
 import { ExternalPlayer } from "@/components/media/ExternalPlayer";
-import { PlayIMDBPlayer } from "@/components/media/PlayIMDBPlayer";
 import type { VideoItemDetail } from "@/lib/types";
 
 export default function WatchPage() {
@@ -60,10 +59,8 @@ export default function WatchPage() {
   if (!profile) return <div className="grid min-h-screen place-items-center text-mythra-text-muted">Choose a profile first.</div>;
 
   const hasFile = item.data?.hasFile ?? true; // default true so existing items work before fetch
-  const imdbId = item.data?.imdbId;
-  // Priority: local file > PlayIMDB (when IMDB ID known) > other external providers
-  const usePlayImdb = !hasFile && !!imdbId && !!item.data;
-  const isExternalOnly = item.data && !hasFile && !usePlayImdb;
+  // Priority: local file > external provider (Vidsrc / Consumet / etc.)
+  const isExternalOnly = !!item.data && !hasFile;
 
   return (
     <main className="relative min-h-screen bg-black">
@@ -80,9 +77,7 @@ export default function WatchPage() {
       <div className="mx-auto flex min-h-screen max-w-[1700px] flex-col px-4 pt-20 lg:px-10">
 
         {/* ── Player ─────────────────────────────────────────────────────── */}
-        {usePlayImdb ? (
-          <PlayIMDBPlayer imdbId={imdbId!} title={item.data?.title ?? ""} />
-        ) : isExternalOnly ? (
+        {isExternalOnly ? (
           <ExternalPlayer
             mediaItemId={params.id}
             season={item.data?.seasonNumber}
@@ -112,12 +107,7 @@ export default function WatchPage() {
                 {(item.data.genres ?? []).slice(0, 3).map((g) => (
                   <span key={g} className="rounded-full border border-white/10 px-2 py-0.5">{g}</span>
                 ))}
-                {usePlayImdb && (
-                  <span className="rounded-full border border-mythra-purple/40 bg-mythra-purple/10 px-2 py-0.5 text-mythra-purple">
-                    Streaming via PlayIMDB
-                  </span>
-                )}
-                {isExternalOnly && !usePlayImdb && (
+                {isExternalOnly && (
                   <span className="rounded-full border border-mythra-purple/40 bg-mythra-purple/10 px-2 py-0.5 text-mythra-purple">
                     Streaming via external provider
                   </span>

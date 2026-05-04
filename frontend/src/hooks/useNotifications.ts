@@ -3,40 +3,48 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth";
+import { api } from "@/lib/api";
 import type { Notification } from "@/lib/types";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+/**
+ * Where to point the SSE EventSource. Goes through the same Next.js dev
+ * rewrite that `lib/api.ts` uses, so we never bypass the axios interceptor
+ * or hit the wrong port (the backend listens on 5080, not 5000).
+ */
+const SSE_ORIGIN = process.env.NEXT_PUBLIC_API_ORIGIN ?? "/api";
 
 export function useNotifications() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const qc = useQueryClient();
   const [unreadCount, setUnreadCount] = useState(0);
   const [latest, setLatest] = useState<Notification | null>(null);
-  const esRef = useRef<EventSource | null>(null);
+  const ctrlRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
 
-    // Initial unread count fetch
-    fetch(`${BASE}/api/v1/notifications/unread-count`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-      .then((r) => r.json())
-      .then((d: { count: number }) => setUnreadCount(d.count))
+    let cancelled = false;
+
+    // Initial unread count fetch — uses the shared axios instance so the
+    // request interceptor adds Authorization and the response interceptor
+    // can refresh on 401.
+    api
+      .get<{ count: number }>("/notifications/unread-count")
+      .then((r) => {
+        if (!cancelled) setUnreadCount(r.data.count);
+      })
       .catch(() => {});
 
-    // SSE stream
-    const url = new URL(`${BASE}/api/v1/notifications/stream`);
-    const es = new EventSource(url.toString(), {
-      // EventSource doesn't support custom headers natively;
-      // we rely on the server to accept a token query param as fallback.
-    });
-
-    // Use native fetch-based SSE via ReadableStream for auth header support
+    // SSE stream via fetch (EventSource doesn't support custom headers).
     const ctrl = new AbortController();
+    ctrlRef.current = ctrl;
     let buffer = "";
 
-    fetch(`${BASE}/api/v1/notifications/stream`, {
+    const sseUrl = SSE_ORIGIN.startsWith("http")
+      ? `${SSE_ORIGIN}/api/v1/notifications/stream`
+      : `${SSE_ORIGIN}/v1/notifications/stream`;
+
+    fetch(sseUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "text/event-stream",
@@ -73,10 +81,9 @@ export function useNotifications() {
       })
       .catch(() => {});
 
-    esRef.current = es;
     return () => {
+      cancelled = true;
       ctrl.abort();
-      es.close();
     };
   }, [accessToken, qc]);
 
