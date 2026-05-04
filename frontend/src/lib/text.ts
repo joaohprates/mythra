@@ -34,3 +34,22 @@ export function cleanDescription(raw: string | null | undefined): string {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
+
+/**
+ * Convert a byte count to a human-readable size string.
+ * Returns an em-dash for nullish/non-finite values so callers can render the
+ * result directly without ternaries.
+ */
+export function formatBytes(bytes: number | null | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes <= 0) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i += 1;
+  }
+  const decimals = i >= 2 ? (value < 10 ? 2 : 1) : 0;
+  return `${value.toFixed(decimals)} ${units[i]}`;
+}
+

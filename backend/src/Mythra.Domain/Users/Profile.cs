@@ -13,7 +13,7 @@ public sealed class Profile : Entity
     public string Theme { get; set; } = "mythra-dark";
 
     public List<MediaKind> EnabledMediaKinds { get; set; } = [
-        MediaKind.Video, MediaKind.Manga, MediaKind.Book, MediaKind.Audio];
+        MediaKind.Video, MediaKind.Manga, MediaKind.Book];
 
     // ── Language preferences ──────────────────────────────────────────────────
     /// <summary>Preferred language for metadata titles and overviews (e.g. "pt-BR", "en", "ja").</summary>

@@ -11,6 +11,7 @@ import { Topbar } from "@/components/shell/Topbar";
 import { PageScaffold } from "@/components/shell/PageScaffold";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
+import { useTranslation } from "@/store/locale";
 import type { Notification, NotificationKind } from "@/lib/types";
 
 const KIND_ICON: Record<NotificationKind, React.ReactNode> = {
@@ -37,6 +38,7 @@ export default function NotificationsPage() {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const qc = useQueryClient();
+  const t = useTranslation();
 
   const { data, isLoading } = useQuery({
     queryKey: ["notifications"],
@@ -79,16 +81,16 @@ export default function NotificationsPage() {
         >
           <div>
             <h1 className="mb-1 text-3xl font-bold tracking-tight md:text-4xl">
-              <span className="gradient-text">Notifications</span>
+              <span className="gradient-text">{t("notifications.title")}</span>
             </h1>
-            {data && <p className="text-sm text-mythra-text-muted">{data.unreadCount} unread</p>}
+            {data && <p className="text-sm text-mythra-text-muted">{t("notifications.unread", { count: String(data.unreadCount) })}</p>}
           </div>
           {notifications.some((n) => !n.isRead) && (
             <button
               onClick={markAllRead}
               className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-white/10 px-4 py-2 text-xs hover:bg-white/5"
             >
-              <CheckCheck size={13} /> Mark all read
+              <CheckCheck size={13} /> {t("notifications.markAllRead")}
             </button>
           )}
         </motion.div>
@@ -108,7 +110,7 @@ export default function NotificationsPage() {
             <span className="grid h-16 w-16 place-items-center rounded-full bg-white/[0.04]">
               <Bell size={28} className="text-mythra-text-muted" />
             </span>
-            <p className="text-mythra-text-muted">All caught up! No notifications.</p>
+            <p className="text-mythra-text-muted">{t("notifications.empty")}</p>
           </motion.div>
         )}
 
@@ -155,7 +157,7 @@ export default function NotificationsPage() {
                     <button
                       onClick={() => markRead(n.id)}
                       className="rounded-full p-1.5 hover:bg-white/10"
-                      title="Mark as read"
+                      title={t("notifications.markRead")}
                     >
                       <CheckCheck size={13} />
                     </button>
@@ -163,7 +165,7 @@ export default function NotificationsPage() {
                   <button
                     onClick={() => deleteNotification(n.id)}
                     className="rounded-full p-1.5 hover:bg-rose-500/10 text-rose-400"
-                    title="Delete"
+                    title={t("notifications.delete")}
                   >
                     <Trash2 size={13} />
                   </button>

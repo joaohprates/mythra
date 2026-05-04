@@ -1,8 +1,7 @@
-export type MediaKind = "Video" | "Manga" | "Book" | "Audio";
-export type LibraryKind = "Video" | "Anime" | "Manga" | "Book" | "Audiobook" | "Music" | "General" | "Image";
+export type MediaKind = "Video" | "Manga" | "Book";
+export type LibraryKind = "Video" | "Anime" | "Manga" | "Book" | "General" | "Image";
 export type VideoKind = "Movie" | "Series" | "Season" | "Episode" | "Anime" | "AnimeMovie" | "Special" | "Trailer" | "Other";
 export type BookFormat = "Epub" | "Pdf" | "Mobi" | "Azw3" | "Cbz";
-export type AudioKind = "Audiobook" | "Podcast" | "Music" | "Soundtrack";
 export type MangaReadingDirection = "LeftToRight" | "RightToLeft" | "Vertical";
 
 export interface Profile {
@@ -155,26 +154,6 @@ export interface BookChapter {
   anchor?: string | null;
   startPage?: number | null;
   endPage?: number | null;
-}
-
-export interface AudioItemDetail extends MediaItem {
-  author?: string | null;
-  narrator?: string | null;
-  series?: string | null;
-  seriesIndex?: number | null;
-  audioKind: AudioKind;
-  duration?: string | null;
-  coverPath?: string | null;
-  chapters: AudioChapter[];
-  isExternal: boolean;
-}
-
-export interface AudioChapter {
-  id: string;
-  order: number;
-  title: string;
-  start: string;
-  duration: string;
 }
 
 export interface LibraryFolder {

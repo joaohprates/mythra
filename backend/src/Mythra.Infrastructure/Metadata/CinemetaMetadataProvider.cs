@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Mythra.Application.Abstractions.Metadata;
 using Mythra.Domain.Media;
@@ -16,9 +17,11 @@ namespace Mythra.Infrastructure.Metadata;
 /// </summary>
 public sealed class CinemetaMetadataProvider(
     HttpClient http,
+    IMemoryCache cache,
     ILogger<CinemetaMetadataProvider> log) : IMetadataProvider, ICatalogProvider
 {
     public const string ProviderName = "cinemeta";
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(10);
 
     public string Name => ProviderName;
 
@@ -105,6 +108,10 @@ public sealed class CinemetaMetadataProvider(
 
     private async Task<List<MetadataSearchResult>> FetchAsync(string relativeUrl, string type, CancellationToken ct)
     {
+        var cacheKey = $"cinemeta:{relativeUrl}";
+        if (cache.TryGetValue<List<MetadataSearchResult>>(cacheKey, out var cached) && cached is not null)
+            return cached;
+
         try
         {
             var json = await http.GetFromJsonAsync<JsonElement>(relativeUrl, ct);
@@ -114,6 +121,8 @@ public sealed class CinemetaMetadataProvider(
             var results = new List<MetadataSearchResult>(metas.GetArrayLength());
             foreach (var m in metas.EnumerateArray())
                 results.Add(MapMeta(m, type));
+
+            cache.Set(cacheKey, results, CacheTtl);
             return results;
         }
         catch (Exception ex)

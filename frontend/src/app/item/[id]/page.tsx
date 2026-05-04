@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bookmark, ChevronDown, Download, Headphones, Library, Play, Trash2 } from "lucide-react";
+import { Bookmark, ChevronDown, Download, Library, Play, Trash2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -12,12 +12,16 @@ import { useAuthStore } from "@/store/auth";
 import { cn } from "@/lib/cn";
 import { cleanDescription } from "@/lib/text";
 import { useTranslation } from "@/store/locale";
+import { SmartImage } from "@/components/ui/SmartImage";
+import { useHasDownloadAddon, useHasStreamAddon } from "@/hooks/useAddonCapabilities";
+import { DownloadDialog } from "@/components/media/DownloadDialog";
 
 interface ItemAny {
   id: string;
-  kind: "Video" | "Manga" | "Book" | "Audio";
+  kind: "Video" | "Manga" | "Book";
   title: string;
   overview?: string | null;
+  tagline?: string | null;
   posterPath?: string | null;
   backdropPath?: string | null;
   year?: number | null;
@@ -30,13 +34,28 @@ interface ItemAny {
   publisher?: string | null;
   pageCount?: number | null;
   totalChapters?: number | null;
-  audioKind?: string;
   videoKind?: string;
+  isAnime?: boolean;
   chapters?: { id: string; title: string }[];
   fileStatus?: string;
   hasFile?: boolean;
   imdbId?: string | null;
   parentId?: string | null;
+  language?: string | null;
+}
+
+/** Resolve the capability map key for a given item. */
+function resolveCapabilityKey(item: Pick<ItemAny, "kind" | "videoKind" | "isAnime">): string {
+  if (item.kind === "Manga") return "manga";
+  if (item.kind === "Book") return "book";
+  if (item.kind === "Video") {
+    if (item.isAnime) return "anime";
+    const vk = (item.videoKind ?? "").toLowerCase();
+    if (vk === "series" || vk === "season" || vk === "episode") return "series";
+    if (vk === "anime" || vk === "animemovie") return "anime";
+    return "movie";
+  }
+  return "video";
 }
 
 interface EpisodeDto {
@@ -91,8 +110,7 @@ export default function ItemDetailPage() {
             transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
             className="absolute inset-x-0 top-0 -z-10 h-[70vh] overflow-hidden"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={item.backdropPath} alt="" className="h-full w-full object-cover" />
+            <SmartImage src={item.backdropPath} alt="" className="h-full w-full object-cover" fallbackKind="backdrop" loading="eager" />
             <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/65 to-mythra-bg" />
           </motion.div>
         )}
@@ -108,8 +126,7 @@ export default function ItemDetailPage() {
               <div className="grid gap-10 md:grid-cols-[280px_1fr]">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-3xl border border-white/[0.06] shadow-mythra-card">
                   {item.posterPath ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.posterPath} alt={item.title} className="h-full w-full object-cover" />
+                    <SmartImage src={item.posterPath} alt={item.title} className="h-full w-full object-cover" fallbackKind="poster" />
                   ) : (
                     <div className="grid h-full w-full place-items-center bg-gradient-to-br from-[#1a1d35] to-[#070811] text-mythra-text-soft">
                       {item.kind}
@@ -122,7 +139,6 @@ export default function ItemDetailPage() {
                     <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] uppercase tracking-widest text-mythra-text-soft">
                       {item.kind}
                       {item.videoKind && ` • ${item.videoKind}`}
-                      {item.audioKind && ` • ${item.audioKind}`}
                     </span>
                     {item.genres?.some(g => ["Hentai", "Ecchi", "Adult", "Adult Content", "Pornography", "Eroge"].includes(g)) && (
                       <span className="inline-flex items-center gap-1 rounded-full border border-red-400/30 bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-300">
@@ -136,14 +152,14 @@ export default function ItemDetailPage() {
 
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-mythra-text-soft">
                     {item.year && <span>{item.year}</span>}
-                    {item.author && <span>by {item.author}</span>}
+                    {item.author && <span>{t("item.byAuthor", { author: item.author })}</span>}
                     {item.publisher && <span>{item.publisher}</span>}
                     {item.duration && <span>{formatDuration(item.duration)}</span>}
                     {item.resolutionLabel && (
                       <span className="rounded-full border border-white/10 px-2 py-0.5">{item.resolutionLabel}</span>
                     )}
-                    {item.pageCount && <span>{item.pageCount} pages</span>}
-                    {item.totalChapters && <span>{item.totalChapters} chapters</span>}
+                    {item.pageCount && <span>{t("item.pages", { count: String(item.pageCount) })}</span>}
+                    {item.totalChapters && <span>{t("item.chaptersCount", { count: String(item.totalChapters) })}</span>}
                     {item.rating && (
                       <span className="rounded-full bg-amber-300/15 px-2 py-0.5 text-amber-200">
                         ★ {item.rating.toFixed(1)}
@@ -168,23 +184,15 @@ export default function ItemDetailPage() {
                   )}
 
                   <div className="mt-7 flex flex-wrap gap-3">
-                    {!isSeries && <PrimaryAction kind={item.kind} id={item.id} />}
-                    <ActionBtn label={t("action.addToList")} icon={<Bookmark size={16} />} />
+                    {!isSeries && <PrimaryAction item={item} />}
+                    <ActionBtn label={t("item.action.playlist")} icon={<Bookmark size={16} />} />
                     <Link
                       href={`/library/all/${item.kind}`}
                       className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/[0.08]"
                     >
                       <Library size={16} /> {t("nav.library")}
                     </Link>
-                    {item.fileStatus === "Available" && item.hasFile !== false && (
-                      <a
-                        href={`/api/v1/download/${item.id}`}
-                        download
-                        className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/[0.08]"
-                      >
-                        <Download size={16} /> {t("action.download")}
-                      </a>
-                    )}
+                    <DownloadAction item={item} />
                     <RemoveFromLibraryBtn id={item.id} title={item.title} />
                   </div>
 
@@ -210,7 +218,7 @@ export default function ItemDetailPage() {
               {/* ── Book / manga chapters (non-series) ── */}
               {!isSeries && item.chapters && item.chapters.length > 0 && (
                 <div className="mt-10">
-                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-mythra-text-soft">Chapters</h3>
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-mythra-text-soft">{t("item.chapters")}</h3>
                   <ul className="grid gap-2 md:grid-cols-2">
                     {item.chapters.slice(0, 12).map((c, i) => (
                       <li
@@ -226,7 +234,7 @@ export default function ItemDetailPage() {
               )}
             </motion.div>
           ) : (
-            <div className="flex h-[60vh] items-center justify-center text-mythra-text-soft">Loading…</div>
+            <div className="flex h-[60vh] items-center justify-center text-mythra-text-soft">{t("item.loading")}</div>
           )}
         </section>
       </main>
@@ -237,6 +245,7 @@ export default function ItemDetailPage() {
 // ── Series View ──────────────────────────────────────────────────────────────
 
 function SeriesView({ episodes, loading }: { episodes: EpisodeDto[]; loading: boolean }) {
+  const t = useTranslation();
   const seasons = groupBySeason(episodes);
   const seasonNumbers = Object.keys(seasons)
     .map(Number)
@@ -245,17 +254,17 @@ function SeriesView({ episodes, loading }: { episodes: EpisodeDto[]; loading: bo
   const currentSeason = activeSeason ?? seasonNumbers[0] ?? 0;
 
   if (loading) {
-    return <div className="text-center text-mythra-text-muted text-sm py-12">Loading episodes…</div>;
+    return <div className="text-center text-mythra-text-muted text-sm py-12">{t("item.episodesLoading")}</div>;
   }
 
   if (episodes.length === 0) {
-    return <div className="text-center text-mythra-text-muted text-sm py-12">No episodes found.</div>;
+    return <div className="text-center text-mythra-text-muted text-sm py-12">{t("item.noEpisodes")}</div>;
   }
 
   return (
     <div>
       <div className="mb-6 flex items-center gap-4">
-        <h2 className="text-xl font-bold">Episodes</h2>
+        <h2 className="text-xl font-bold">{t("item.episodes")}</h2>
         {/* Season picker */}
         {seasonNumbers.length > 1 && (
           <SeasonSelector
@@ -295,13 +304,15 @@ function SeasonSelector({
   onChange: (s: number) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const t = useTranslation();
+  const seasonLabel = (n: number) => (n === 0 ? t("item.specials") : t("item.season", { n: String(n) }));
   return (
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium transition hover:bg-white/[0.08]"
       >
-        {active === 0 ? "Specials" : `Season ${active}`}
+        {seasonLabel(active)}
         <ChevronDown size={14} className={cn("transition-transform", open && "rotate-180")} />
       </button>
       <AnimatePresence>
@@ -322,7 +333,7 @@ function SeasonSelector({
                     s === active && "text-mythra-purple"
                   )}
                 >
-                  {s === 0 ? "Specials" : `Season ${s}`}
+                  {seasonLabel(s)}
                 </button>
               </li>
             ))}
@@ -334,6 +345,7 @@ function SeasonSelector({
 }
 
 function EpisodeRow({ ep }: { ep: EpisodeDto }) {
+  const t = useTranslation();
   const label = ep.episodeNumber != null ? `E${ep.episodeNumber}` : "";
 
   return (
@@ -345,8 +357,7 @@ function EpisodeRow({ ep }: { ep: EpisodeDto }) {
       {/* Thumbnail / episode number */}
       <div className="relative h-[72px] w-[128px] shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-[#1a1d35] to-[#070811]">
         {ep.posterPath ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={ep.posterPath} alt={ep.title} className="h-full w-full object-cover" />
+          <SmartImage src={ep.posterPath} alt={ep.title} className="h-full w-full object-cover" fallbackKind="backdrop" />
         ) : (
           <div className="grid h-full w-full place-items-center text-mythra-text-soft text-xs">{label}</div>
         )}
@@ -380,9 +391,9 @@ function EpisodeRow({ ep }: { ep: EpisodeDto }) {
           </p>
         )}
         {/* Streaming badge */}
-        {!ep.hasFile && ep.imdbId && (
+        {!ep.hasFile && (
           <span className="mt-2 self-start rounded-full border border-mythra-purple/30 bg-mythra-purple/10 px-2 py-0.5 text-[10px] text-mythra-purple">
-            PlayIMDB
+            {t("item.external")}
           </span>
         )}
       </div>
@@ -417,15 +428,46 @@ function ActionBtn({ label, icon, onClick }: { label: string; icon: React.ReactN
   );
 }
 
-function PrimaryAction({ kind, id }: { kind: string; id: string }) {
+function PrimaryAction({ item }: { item: ItemAny }) {
   const t = useTranslation();
+  const capabilityKey = resolveCapabilityKey(item);
+  const hasStreamAddon = useHasStreamAddon(capabilityKey);
+  const hasFile = item.hasFile !== false;
+
+  // Spec: when no local file AND no streaming addon for this kind → render nothing
+  // (no Play button, no hint banner).
+  if (!hasFile && !hasStreamAddon) {
+    return null;
+  }
+
+  // External provider exists but stream resolution may still fail — keep the
+  // hint banner ONLY when the item is external-only and an addon should resolve it.
+  const externalNeedsAddon =
+    !hasFile && item.fileStatus === "ExternalOnly" && !item.imdbId && hasStreamAddon;
+  if (externalNeedsAddon) {
+    return (
+      <div className="flex flex-col gap-2">
+        <Link
+          href={item.kind === "Video" ? `/watch/${item.id}` : `/read/${item.id}`}
+          className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black shadow-[0_18px_50px_-15px_rgba(255,255,255,0.6)] transition hover:scale-[1.03]"
+        >
+          {item.kind === "Video"
+            ? <><Play size={16} className="fill-current" /> {t("action.watchNow")}</>
+            : <><Library size={16} /> {t("action.readNow")}</>}
+        </Link>
+        <span className="inline-flex items-center gap-1.5 text-[11px] text-amber-300">
+          <AlertTriangle size={12} /> {t("item.external")}
+        </span>
+      </div>
+    );
+  }
+
   const cfg = {
-    Video: { href: `/watch/${id}`, icon: <Play size={16} className="fill-current" />, label: t("action.watchNow") },
-    Manga: { href: `/read/${id}`, icon: <Library size={16} />, label: t("action.readNow") },
-    Book: { href: `/read/${id}`, icon: <Library size={16} />, label: t("action.readNow") },
-    Audio: { href: `/listen/${id}`, icon: <Headphones size={16} />, label: t("action.listenNow") },
+    Video: { href: `/watch/${item.id}`, icon: <Play size={16} className="fill-current" />, label: t("action.watchNow") },
+    Manga: { href: `/read/${item.id}`, icon: <Library size={16} />, label: t("action.readNow") },
+    Book: { href: `/read/${item.id}`, icon: <Library size={16} />, label: t("action.readNow") },
   } as const;
-  const c = cfg[kind as keyof typeof cfg] ?? cfg.Video;
+  const c = cfg[item.kind as keyof typeof cfg] ?? cfg.Video;
   return (
     <Link
       href={c.href}
@@ -433,6 +475,35 @@ function PrimaryAction({ kind, id }: { kind: string; id: string }) {
     >
       {c.icon} {c.label}
     </Link>
+  );
+}
+
+function DownloadAction({ item }: { item: ItemAny }) {
+  const t = useTranslation();
+  const capabilityKey = resolveCapabilityKey(item);
+  const hasDownloadAddon = useHasDownloadAddon(capabilityKey);
+  const hasLocalFile = item.fileStatus === "Available" && item.hasFile !== false;
+  const [open, setOpen] = useState(false);
+
+  // Show button when an addon offers downloads OR when there's a local file.
+  if (!hasDownloadAddon && !hasLocalFile) return null;
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/[0.08]"
+      >
+        <Download size={16} /> {t("action.download")}
+      </button>
+      <DownloadDialog
+        itemId={item.id}
+        open={open}
+        onClose={() => setOpen(false)}
+        fallback={{ language: item.language ?? null }}
+        noAddon={!hasDownloadAddon && !hasLocalFile}
+      />
+    </>
   );
 }
 
@@ -444,7 +515,7 @@ function RemoveFromLibraryBtn({ id, title }: { id: string; title: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const handleRemove = async () => {
-    if (!confirm(`${t("action.removeFromLibrary")}?\n\n"${title}"`)) return;
+    if (!confirm(t("item.removeConfirm", { title }))) return;
     setDeleting(true);
     setError(null);
     try {
@@ -458,7 +529,7 @@ function RemoveFromLibraryBtn({ id, title }: { id: string; title: string }) {
     } catch (err: unknown) {
       const detail =
         (err as { response?: { data?: { detail?: string; title?: string } } })?.response?.data;
-      setError(detail?.detail ?? detail?.title ?? "Failed to remove. Try again.");
+      setError(detail?.detail ?? detail?.title ?? t("item.removeFailed"));
       setDeleting(false);
     }
   };

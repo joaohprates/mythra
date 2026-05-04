@@ -20,7 +20,9 @@ public sealed record ExternalBookRequest(
     string?   GutenbergId   = null,
     string?   LibriVoxId    = null,
     string?   GoogleBooksId = null,
-    string?   MangaDexId    = null);
+    string?   MangaDexId    = null,
+    string?   Isbn          = null,
+    string?   OpenLibraryId = null);
 
 /// <summary>A single downloadable or readable link resolved by a provider.</summary>
 public sealed record ExternalBookResult(

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Mythra.Application.Abstractions.Metadata;
 using Mythra.Application.Abstractions.Persistence;
@@ -5,7 +6,6 @@ using Mythra.Application.Services.Notifications;
 using Mythra.Domain.Common;
 using Mythra.Domain.Libraries;
 using Mythra.Domain.Media;
-using Mythra.Domain.Media.Audio;
 using Mythra.Domain.Media.Books;
 using Mythra.Domain.Media.Manga;
 using Mythra.Domain.Media.Video;
@@ -21,64 +21,88 @@ public sealed class DiscoverService(
     IVideoRepository videoRepo,
     IBookRepository bookRepo,
     IMangaRepository mangaRepo,
-    IAudioRepository audioRepo,
     INotificationService notificationService,
     IUnitOfWork uow,
+    IMemoryCache cache,
     ILogger<DiscoverService> log) : IDiscoverService
 {
     private readonly List<ICatalogProvider> _catalogs = catalogProviders.ToList();
 
     public async Task<Result<DiscoverResultDto>> SearchAsync(DiscoverQuery query, CancellationToken ct = default)
     {
+        var hasQuery = !string.IsNullOrWhiteSpace(query.Query);
+        var skipCache = hasQuery && (query.Query?.Length ?? 0) > 100;
+        var cacheKey = BuildCacheKey(query);
+
+        if (!skipCache && cache.TryGetValue<DiscoverResultDto>(cacheKey, out var cached) && cached is not null)
+            return cached;
+
         IReadOnlyList<MetadataSearchResult> results;
         string usedProvider;
 
-        var hasQuery = !string.IsNullOrWhiteSpace(query.Query);
-
-        if (!hasQuery)
+        try
         {
-            // Catalog browsing — Cinemeta for movie/series, AniList for anime/manga, fallback chain.
-            (results, usedProvider) = await BrowseCatalogAsync(query, ct);
+            (results, usedProvider) = hasQuery
+                ? await FreeTextSearchAsync(query, ct)
+                : await BrowseCatalogAsync(query, ct);
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Discover search failed (kind={Kind}, type={Type}, q='{Query}')",
+                query.Kind, query.Type, query.Query);
+            return new DiscoverResultDto([], 0, query.Skip, query.Take);
+        }
+
+        DiscoverResultDto dto;
+        if (results.Count == 0)
+        {
+            dto = new DiscoverResultDto([], query.Skip, query.Skip, query.Take);
         }
         else
         {
-            (results, usedProvider) = await FreeTextSearchAsync(query, ct);
-        }
-
-        if (results.Count == 0)
-            return new DiscoverResultDto([], 0, query.Skip, query.Take);
-
-        var items = new List<DiscoverItemDto>(results.Count);
-        foreach (var r in results)
-        {
-            Guid? existingId = null;
-            var alreadyImported = false;
-            foreach (var (key, value) in r.ProviderIds)
+            var items = new List<DiscoverItemDto>(results.Count);
+            foreach (var r in results)
             {
-                var existing = await mediaItemRepo.GetByProviderIdAsync(key, value, ct);
-                if (existing is not null) { alreadyImported = true; existingId = existing.Id; break; }
+                Guid? existingId = null;
+                var alreadyImported = false;
+                foreach (var (key, value) in r.ProviderIds)
+                {
+                    var existing = await mediaItemRepo.GetByProviderIdAsync(key, value, ct);
+                    if (existing is not null) { alreadyImported = true; existingId = existing.Id; break; }
+                }
+
+                items.Add(new DiscoverItemDto(
+                    ExternalId:      r.ProviderId,
+                    ProviderKind:    usedProvider,
+                    Title:           r.Title,
+                    OriginalTitle:   r.OriginalTitle,
+                    Year:            r.ReleaseDate?.Year,
+                    Rating:          r.Rating,
+                    Overview:        r.Overview,
+                    PosterPath:      r.PosterUrl,
+                    BackdropPath:    r.BackdropUrl,
+                    Genres:          r.Genres,
+                    AlreadyImported: alreadyImported,
+                    ExistingItemId:  existingId?.ToString(),
+                    IsAdult:         r.IsAdult));
             }
 
-            items.Add(new DiscoverItemDto(
-                ExternalId:      r.ProviderId,
-                ProviderKind:    usedProvider,
-                Title:           r.Title,
-                OriginalTitle:   r.OriginalTitle,
-                Year:            r.ReleaseDate?.Year,
-                Rating:          r.Rating,
-                Overview:        r.Overview,
-                PosterPath:      r.PosterUrl,
-                BackdropPath:    r.BackdropUrl,
-                Genres:          r.Genres,
-                AlreadyImported: alreadyImported,
-                ExistingItemId:  existingId?.ToString(),
-                IsAdult:         r.IsAdult));
+            // We don't know the true total upstream — return a generous estimate so the UI can paginate.
+            var total = items.Count < query.Take ? query.Skip + items.Count : query.Skip + query.Take + 1;
+            dto = new DiscoverResultDto(items, total, query.Skip, query.Take);
         }
 
-        // We don't know the true total upstream — return a generous estimate so the UI can paginate.
-        var total = items.Count < query.Take ? query.Skip + items.Count : query.Skip + query.Take + 1;
-        return new DiscoverResultDto(items, total, query.Skip, query.Take);
+        if (!skipCache)
+        {
+            var ttl = hasQuery ? TimeSpan.FromSeconds(60) : TimeSpan.FromMinutes(5);
+            cache.Set(cacheKey, dto, ttl);
+        }
+
+        return dto;
     }
+
+    private static string BuildCacheKey(DiscoverQuery q) =>
+        $"discover:{q.Type}:{(int)q.Kind}:{q.Category}:{(q.Query ?? "").ToLowerInvariant()}:{q.Skip}:{q.Take}:{q.Provider ?? ""}";
 
     private async Task<(IReadOnlyList<MetadataSearchResult> Results, string Provider)> BrowseCatalogAsync(
         DiscoverQuery q, CancellationToken ct)
@@ -87,33 +111,62 @@ public sealed class DiscoverService(
         if (q.Provider is not null)
             providers = providers.Where(p => p.Name.Equals(q.Provider, StringComparison.OrdinalIgnoreCase)).ToList();
 
-        foreach (var p in providers)
+        if (providers.Count > 0)
         {
-            try
+            // Fan out in parallel; preserve provider priority order when picking the first non-empty result.
+            var tasks = providers
+                .Select(p => SafeCatalogCallAsync(p, q, ct))
+                .ToArray();
+            var allResults = await Task.WhenAll(tasks);
+            for (var i = 0; i < providers.Count; i++)
             {
-                var items = await p.GetCatalogAsync(q.Kind, q.Type, q.Category, q.Skip, q.Take, ct);
+                var items = allResults[i];
                 if (items.Count > 0)
-                    return (items, p.Name);
-            }
-            catch (Exception ex)
-            {
-                log.LogWarning(ex, "Catalog provider {Provider} failed.", p.Name);
+                    return (items, providers[i].Name);
             }
         }
 
         // Fallback to any matching IMetadataProvider's empty-query search (rare path).
         var fallback = metadataRegistry.ProvidersFor(q.Kind);
-        foreach (var p in fallback)
+        var fallbackTasks = fallback
+            .Select(p => SafeMetaSearchAsync(p, "", q.Kind, ct))
+            .ToArray();
+        var fallbackResults = await Task.WhenAll(fallbackTasks);
+        for (var i = 0; i < fallback.Count; i++)
         {
-            try
-            {
-                var r = await p.SearchAsync(q.Type, q.Kind, null, ct);
-                if (r.Count > 0) return (r.Skip(q.Skip).Take(q.Take).ToList(), p.Name);
-            }
-            catch { /* continue */ }
+            var r = fallbackResults[i];
+            if (r.Count > 0) return (r.Skip(q.Skip).Take(q.Take).ToList(), fallback[i].Name);
         }
 
         return ([], string.Empty);
+    }
+
+    private async Task<IReadOnlyList<MetadataSearchResult>> SafeCatalogCallAsync(
+        ICatalogProvider p, DiscoverQuery q, CancellationToken ct)
+    {
+        try
+        {
+            return await p.GetCatalogAsync(q.Kind, q.Type, q.Category, q.Skip, q.Take, ct);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Catalog provider {Provider} failed.", p.Name);
+            return [];
+        }
+    }
+
+    private async Task<IReadOnlyList<MetadataSearchResult>> SafeMetaSearchAsync(
+        IMetadataProvider p, string query, MediaKind kind, CancellationToken ct)
+    {
+        try
+        {
+            return await p.SearchAsync(query, kind, null, ct);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Search provider {Provider} failed.", p.Name);
+            return [];
+        }
     }
 
     private async Task<(IReadOnlyList<MetadataSearchResult> Results, string Provider)> FreeTextSearchAsync(
@@ -124,18 +177,18 @@ public sealed class DiscoverService(
             ? allProviders.Where(p => p.Name.Equals(q.Provider, StringComparison.OrdinalIgnoreCase)).ToList()
             : (IReadOnlyList<IMetadataProvider>)allProviders;
 
-        foreach (var p in candidates)
+        if (candidates.Count == 0) return ([], string.Empty);
+
+        var tasks = candidates
+            .Select(p => SafeMetaSearchAsync(p, q.Query!, q.Kind, ct))
+            .ToArray();
+        var allResults = await Task.WhenAll(tasks);
+
+        for (var i = 0; i < candidates.Count; i++)
         {
-            try
-            {
-                var results = await p.SearchAsync(q.Query!, q.Kind, null, ct);
-                if (results.Count > 0)
-                    return (results.Skip(q.Skip).Take(q.Take).ToList(), p.Name);
-            }
-            catch (Exception ex)
-            {
-                log.LogWarning(ex, "Search provider {Provider} failed.", p.Name);
-            }
+            var results = allResults[i];
+            if (results.Count > 0)
+                return (results.Skip(q.Skip).Take(q.Take).ToList(), candidates[i].Name);
         }
 
         return ([], string.Empty);
@@ -143,16 +196,46 @@ public sealed class DiscoverService(
 
     public async Task<Result<ImportResultDto>> ImportAsync(ImportExternalRequest req, CancellationToken ct = default)
     {
-        // 1. Resolve metadata
-        var provider = metadataRegistry.GetByName(req.ProviderKind)
-            ?? metadataRegistry.ProvidersFor(req.MediaKind).FirstOrDefault();
+        log.LogInformation(
+            "Discover import requested: provider={Provider}, externalId={ExternalId}, kind={Kind}",
+            req.ProviderKind, req.ExternalId, req.MediaKind);
+
+        try
+        {
+            return await ImportCoreAsync(req, ct);
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex,
+                "Discover import failed for {Provider}:{ExternalId} ({Kind})",
+                req.ProviderKind, req.ExternalId, req.MediaKind);
+            return Error.Internal($"Import failed: {ex.Message}");
+        }
+    }
+
+    private async Task<Result<ImportResultDto>> ImportCoreAsync(ImportExternalRequest req, CancellationToken ct)
+    {
+        // 1. Resolve metadata — try the named provider first, then any provider that
+        //    supports this media kind so the import survives a misnamed ProviderKind.
+        var primary  = metadataRegistry.GetByName(req.ProviderKind);
+        var fallback = metadataRegistry.ProvidersFor(req.MediaKind);
+        var provider = primary ?? fallback.FirstOrDefault();
+        var triedFallback = primary is null && provider is not null;
 
         if (provider is null)
             return Error.Validation($"Provider '{req.ProviderKind}' not found or does not support {req.MediaKind}.");
 
         var metadata = await provider.GetByIdAsync(req.ExternalId, req.MediaKind, ct);
         if (metadata is null)
-            return Error.NotFound("ExternalItem", req.ExternalId);
+        {
+            var triedNames = triedFallback
+                ? $"{req.ProviderKind} (missing) → fallback {provider.Name}"
+                : provider.Name;
+            log.LogWarning(
+                "Discover import not found: providers tried = {Tried} for externalId {ExternalId} ({Kind})",
+                triedNames, req.ExternalId, req.MediaKind);
+            return Error.NotFound("ExternalItem", $"{req.ProviderKind}:{req.ExternalId} (tried {triedNames})");
+        }
 
         // 2. Check for duplicates across known provider ids
         foreach (var (key, value) in metadata.ProviderIds)
@@ -166,7 +249,7 @@ public sealed class DiscoverService(
         var libraryId = req.TargetLibraryId ?? await EnsureExternalLibraryAsync(req.MediaKind, ct);
 
         // 4. Create the MediaItem (no FilePath — external only)
-        if (req.MediaKind is not (MediaKind.Video or MediaKind.Book or MediaKind.Manga or MediaKind.Audio))
+        if (req.MediaKind is not (MediaKind.Video or MediaKind.Book or MediaKind.Manga))
             return Error.Validation($"Unsupported media kind: {req.MediaKind}");
 
         MediaItem created = req.MediaKind switch
@@ -174,7 +257,7 @@ public sealed class DiscoverService(
             MediaKind.Video => CreateVideoItem(libraryId, metadata),
             MediaKind.Book  => CreateBookItem(libraryId, metadata),
             MediaKind.Manga => CreateMangaItem(libraryId, metadata),
-            _               => CreateAudioItem(libraryId, metadata),
+            _               => throw new InvalidOperationException("Unsupported media kind"),
         };
 
         foreach (var g in metadata.Genres)
@@ -190,7 +273,6 @@ public sealed class DiscoverService(
             case VideoItem v: await videoRepo.AddAsync(v, ct); break;
             case BookItem  b: await bookRepo.AddAsync(b, ct);  break;
             case MangaItem m: await mangaRepo.AddAsync(m, ct); break;
-            case AudioItem a: await audioRepo.AddAsync(a, ct); break;
         }
 
         await uow.SaveChangesAsync(ct);
@@ -209,7 +291,6 @@ public sealed class DiscoverService(
             MediaKind.Video => $"/watch/{created.Id}",
             MediaKind.Book  => $"/read/{created.Id}",
             MediaKind.Manga => $"/read/{created.Id}",
-            MediaKind.Audio => $"/listen/{created.Id}",
             _ => $"/item/{created.Id}",
         };
 
@@ -235,7 +316,6 @@ public sealed class DiscoverService(
             MediaKind.Video => LibraryKind.Video,
             MediaKind.Book  => LibraryKind.Book,
             MediaKind.Manga => LibraryKind.Manga,
-            MediaKind.Audio => LibraryKind.Audiobook,
             _ => LibraryKind.Video,
         };
 
@@ -292,22 +372,6 @@ public sealed class DiscoverService(
             ReleaseDate = m.ReleaseDate,
             Rating     = m.Rating,
             PosterPath = m.PosterUrl,
-        };
-        ApplyProviderIds(item, m.ProviderIds);
-        return item;
-    }
-
-    private static AudioItem CreateAudioItem(Guid libId, MetadataSearchResult m)
-    {
-        var item = new AudioItem
-        {
-            LibraryId  = libId,
-            Title      = m.Title,
-            Overview   = m.Overview,
-            ReleaseDate = m.ReleaseDate,
-            Rating     = m.Rating,
-            PosterPath = m.PosterUrl,
-            AudioKind  = Domain.Media.Audio.AudioKind.Audiobook,
         };
         ApplyProviderIds(item, m.ProviderIds);
         return item;

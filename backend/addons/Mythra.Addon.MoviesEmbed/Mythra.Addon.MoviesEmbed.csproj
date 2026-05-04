@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <ExcludeAssets>runtime</ExcludeAssets>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Mythra.Addons.Contracts\Mythra.Addons.Contracts.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!--
+    After build, deposit the addon DLL + manifest into the host's runtime addons
+    directory so AddonHost can discover and load it on the next startup.
+    Mirrors AddonOptions.Directory default ("addons" relative to API workdir).
+  -->
+  <Target Name="CopyAddonToRuntime" AfterTargets="Build">
+    <ItemGroup>
+      <_AddonRuntimeFiles Include="$(OutputPath)$(MSBuildProjectName).dll" />
+      <_AddonRuntimeFiles Include="$(MSBuildProjectDirectory)\manifest.json" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(_AddonRuntimeFiles)"
+      DestinationFolder="$(MSBuildThisFileDirectory)..\..\src\Mythra.Api\addons\$(MSBuildProjectName)\"
+      SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

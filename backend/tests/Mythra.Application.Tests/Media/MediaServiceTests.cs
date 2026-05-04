@@ -4,7 +4,6 @@ using Mythra.Application.Abstractions.Persistence;
 using Mythra.Application.Dtos.Media;
 using Mythra.Application.Services.Media;
 using Mythra.Domain.Media;
-using Mythra.Domain.Media.Audio;
 using Mythra.Domain.Media.Books;
 using Mythra.Domain.Media.Manga;
 using Mythra.Domain.Media.Video;
@@ -17,12 +16,11 @@ public class MediaServiceTests
     private readonly Mock<IVideoRepository> _videos = new();
     private readonly Mock<IMangaRepository> _mangas = new();
     private readonly Mock<IBookRepository> _books = new();
-    private readonly Mock<IAudioRepository> _audios = new();
     private readonly Mock<IGenreRepository> _genres = new();
     private readonly Mock<IUnitOfWork> _uow = new();
 
     private MediaService Build() =>
-        new(_media.Object, _videos.Object, _mangas.Object, _books.Object, _audios.Object, _genres.Object, _uow.Object);
+        new(_media.Object, _videos.Object, _mangas.Object, _books.Object, _genres.Object, _uow.Object);
 
     // ── ListAsync ──────────────────────────────────────────────────────────────
 
@@ -138,21 +136,6 @@ public class MediaServiceTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeOfType<BookItemDto>();
-    }
-
-    [Fact]
-    public async Task GetDetailAsync_returns_AudioItemDto_for_audio()
-    {
-        var audio = new AudioItem { Title = "The Hobbit (Audio)", LibraryId = Guid.NewGuid() };
-        _media.Setup(m => m.GetByIdWithDetailsAsync(audio.Id, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(audio);
-        _audios.Setup(a => a.GetByIdWithChaptersAsync(audio.Id, It.IsAny<CancellationToken>()))
-               .ReturnsAsync(audio);
-
-        var result = await Build().GetDetailAsync(audio.Id);
-
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Should().BeOfType<AudioItemDto>();
     }
 
     // ── RecentlyAddedAsync ─────────────────────────────────────────────────────

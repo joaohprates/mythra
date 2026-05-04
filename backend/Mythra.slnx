@@ -11,4 +11,7 @@
     <Project Path="tests/Mythra.Domain.Tests/Mythra.Domain.Tests.csproj" />
     <Project Path="tests/Mythra.Infrastructure.Tests/Mythra.Infrastructure.Tests.csproj" />
   </Folder>
+  <Folder Name="/addons/">
+    <Project Path="addons/Mythra.Addon.MoviesEmbed/Mythra.Addon.MoviesEmbed.csproj" />
+  </Folder>
 </Solution>

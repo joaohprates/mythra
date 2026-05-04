@@ -13,6 +13,7 @@ import { PageScaffold } from "@/components/shell/PageScaffold";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import { useTranslation } from "@/store/locale";
+import { SmartImage } from "@/components/ui/SmartImage";
 import type { Playlist, PlaylistDetail } from "@/lib/types";
 
 // ── API helpers ──────────────────────────────────────────────────────────────
@@ -237,7 +238,6 @@ function PlaylistDetailView({
   const handlePlay = (item: { mediaItemId: string; kind: string }) => {
     const routes: Record<string, string> = {
       Video: `/watch/${item.mediaItemId}`,
-      Audio: `/listen/${item.mediaItemId}`,
       Book:  `/read/${item.mediaItemId}`,
       Manga: `/read/${item.mediaItemId}`,
     };
@@ -298,11 +298,11 @@ function PlaylistDetailView({
                 onClick={() => handlePlay(item)}
               >
                 {item.posterPath ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <SmartImage
                     src={item.posterPath}
                     alt={item.title}
                     className="h-14 w-10 rounded-lg object-cover shadow"
+                    fallbackKind="poster"
                   />
                 ) : (
                   <div className="flex h-14 w-10 items-center justify-center rounded-lg bg-white/[0.06]">

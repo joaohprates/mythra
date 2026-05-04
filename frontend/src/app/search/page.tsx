@@ -8,32 +8,39 @@ import { Topbar } from "@/components/shell/Topbar";
 import { PageScaffold } from "@/components/shell/PageScaffold";
 import { MediaCard } from "@/components/media/MediaCard";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/store/locale";
 import type { MediaKind, SearchResult } from "@/lib/types";
 
-const KINDS: MediaKind[] = ["Video", "Manga", "Book", "Audio"];
+const KINDS: MediaKind[] = ["Video", "Manga", "Book"];
 
 export default function SearchPage() {
+  const t = useTranslation();
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [filterKinds, setFilterKinds] = useState<MediaKind[]>([]);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(query), 220);
-    return () => clearTimeout(t);
+    const id = setTimeout(() => setDebounced(query), 300);
+    return () => clearTimeout(id);
   }, [query]);
 
+  const hasFilters = filterKinds.length > 0;
+  const trimmedQuery = debounced.trim();
+  const shouldSearch = trimmedQuery.length > 0 || hasFilters;
+
   const search = useQuery({
-    queryKey: ["search", debounced, filterKinds],
+    queryKey: ["search", trimmedQuery, filterKinds],
     queryFn: async () => {
-      if (!debounced) return { hits: [], total: 0, elapsedMs: 0 } as SearchResult;
+      if (!shouldSearch) return { hits: [], total: 0, elapsedMs: 0 } as SearchResult;
       const res = await api.post<SearchResult>("/search", {
-        query: debounced,
+        query: trimmedQuery || "*",
         kinds: filterKinds.length ? filterKinds : null,
         skip: 0,
         take: 60,
       });
       return res.data;
     },
+    enabled: shouldSearch,
   });
 
   const toggleKind = (k: MediaKind) =>
@@ -49,10 +56,10 @@ export default function SearchPage() {
             animate={{ opacity: 1, y: 0 }}
             className="text-center text-4xl font-bold tracking-tight md:text-5xl"
           >
-            <span className="gradient-text">Find anything</span>
+            <span className="gradient-text">{t("search.title")}</span>
           </motion.h1>
           <p className="mt-2 text-center text-sm text-mythra-text-muted">
-            Search across movies, anime, manga, books, and audiobooks at once.
+            {t("search.subtitle")}
           </p>
 
           <div className="mt-8 flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-3 focus-within:border-mythra-purple/60">
@@ -61,7 +68,7 @@ export default function SearchPage() {
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder='Try "time travel anime" or "dune"'
+              placeholder={t("search.placeholder")}
               className="flex-1 bg-transparent text-base text-white placeholder-mythra-text-soft outline-none"
             />
           </div>
@@ -88,13 +95,18 @@ export default function SearchPage() {
         </div>
 
         <div className="mt-12">
-          {search.data && search.data.hits.length === 0 && debounced && (
-            <p className="text-center text-sm text-mythra-text-soft">No results for &ldquo;{debounced}&rdquo;.</p>
+          {search.data && search.data.hits.length === 0 && shouldSearch && !search.isFetching && (
+            <p className="text-center text-sm text-mythra-text-soft">
+              {t("search.noResults", { query: trimmedQuery || "—" })}
+            </p>
           )}
           {search.data && search.data.hits.length > 0 && (
             <>
               <p className="mb-4 text-xs text-mythra-text-soft">
-                {search.data.total} results in {search.data.elapsedMs.toFixed(0)}ms
+                {t("search.results", {
+                  total: String(search.data.total),
+                  ms: search.data.elapsedMs.toFixed(0),
+                })}
               </p>
               <motion.div
                 initial="hidden"

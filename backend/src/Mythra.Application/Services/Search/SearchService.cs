@@ -3,7 +3,6 @@ using Mythra.Application.Abstractions.Persistence;
 using Mythra.Application.Dtos.Search;
 using Mythra.Domain.Common;
 using Mythra.Domain.Media;
-using Mythra.Domain.Media.Audio;
 using Mythra.Domain.Media.Books;
 using Mythra.Domain.Media.Manga;
 using Mythra.Domain.Media.Video;
@@ -18,13 +17,16 @@ public sealed class SearchService(IMediaItemRepository media) : ISearchService
         var hits = new List<SearchHit>();
         var kinds = request.Kinds is { Count: > 0 }
             ? request.Kinds
-            : [MediaKind.Video, MediaKind.Manga, MediaKind.Book, MediaKind.Audio];
+            : [MediaKind.Video, MediaKind.Manga, MediaKind.Book];
+
+        var genreFilter = request.Genres is { Count: > 0 } ? request.Genres[0] : null;
 
         foreach (var kind in kinds.Distinct())
         {
             var items = await media.SearchAsync(new MediaQuery(
                 Kind: kind,
-                Search: request.Query,
+                Search: string.IsNullOrWhiteSpace(request.Query) ? null : request.Query,
+                Genre: genreFilter,
                 Skip: 0,
                 Take: request.Take), ct);
 
@@ -61,7 +63,6 @@ public sealed class SearchService(IMediaItemRepository media) : ISearchService
         VideoItem v => v.VideoKind.ToString(),
         MangaItem m => m.Author,
         BookItem b => b.Author,
-        AudioItem a => a.Author ?? a.Narrator,
         _ => null,
     };
 

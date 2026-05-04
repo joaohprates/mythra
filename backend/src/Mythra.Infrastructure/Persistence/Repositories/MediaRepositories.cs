@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Mythra.Application.Abstractions.Persistence;
 using Mythra.Domain.Media;
-using Mythra.Domain.Media.Audio;
 using Mythra.Domain.Media.Books;
 using Mythra.Domain.Media.Manga;
 using Mythra.Domain.Media.Video;
@@ -126,12 +125,6 @@ public sealed class BookRepository(MythraDbContext db) : EfRepository<BookItem>(
 
     public Task<BookItem?> GetByPathAsync(string path, CancellationToken ct = default) =>
         Set.FirstOrDefaultAsync(b => b.FilePath == path, ct);
-}
-
-public sealed class AudioRepository(MythraDbContext db) : EfRepository<AudioItem>(db), IAudioRepository
-{
-    public Task<AudioItem?> GetByIdWithChaptersAsync(Guid id, CancellationToken ct = default) =>
-        Set.Include(a => a.Chapters).FirstOrDefaultAsync(a => a.Id == id, ct);
 }
 
 public sealed class GenreRepository(MythraDbContext db) : EfRepository<Genre>(db), IGenreRepository

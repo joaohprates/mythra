@@ -74,9 +74,18 @@ public sealed class LibraryService(
         var lib = await libraries.GetByIdAsync(id, ct);
         if (lib is null) return Error.NotFound("Library", id);
         if (lib.IsSystem) return Error.Validation("System libraries cannot be deleted.");
-        libraries.Remove(lib);
-        await uow.SaveChangesAsync(ct);
-        return Result.Success();
+
+        try
+        {
+            await libraries.DeleteWithCascadeAsync(id, ct);
+            log.LogInformation("Deleted library {LibraryId} (with cascade).", id);
+            return Result.Success();
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Cascade delete of library {LibraryId} failed.", id);
+            return Error.Internal($"Failed to delete library: {ex.GetBaseException().Message}");
+        }
     }
 
     public async Task<Result<LibraryDetailDto>> AddFolderAsync(Guid id, AddFolderRequest req, CancellationToken ct = default)

@@ -21,7 +21,8 @@ public sealed class StreamingService(
     {
         var video = await videos.GetByIdAsync(req.MediaItemId, ct);
         if (video is null) return Error.NotFound("VideoItem", req.MediaItemId);
-        if (string.IsNullOrWhiteSpace(video.FilePath)) return Error.Validation("Source file path is missing.");
+        if (string.IsNullOrWhiteSpace(video.FilePath))
+            return Error.NotFound("LocalFile", "No local file. Install a streaming addon to play this item.");
 
         var mode = DecideMode(video, req);
         var session = new StreamSession

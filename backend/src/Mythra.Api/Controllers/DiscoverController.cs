@@ -64,7 +64,6 @@ public sealed class DiscoverController(IDiscoverService discover) : ControllerBa
             "movie" or "series" or "anime" => MediaKind.Video,
             "manga" => MediaKind.Manga,
             "book"  => MediaKind.Book,
-            "music" or "audio" or "audiobook" => MediaKind.Audio,
             _ => null,
         };
     }
@@ -76,7 +75,6 @@ public sealed class DiscoverController(IDiscoverService discover) : ControllerBa
         "anime"              => "anime",
         "manga"              => "manga",
         "book" or "books"    => "book",
-        "music" or "audio"   => "music",
         _ => "movie",
     };
 }

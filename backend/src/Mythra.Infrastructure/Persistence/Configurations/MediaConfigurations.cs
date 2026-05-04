@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Mythra.Domain.Media;
-using Mythra.Domain.Media.Audio;
 using Mythra.Domain.Media.Books;
 using Mythra.Domain.Media.Manga;
 using Mythra.Domain.Media.Video;
@@ -46,8 +45,7 @@ public sealed class MediaItemConfiguration : IEntityTypeConfiguration<MediaItem>
         b.HasDiscriminator<int>("MediaKind")
             .HasValue<VideoItem>((int)MediaKind.Video)
             .HasValue<MangaItem>((int)MediaKind.Manga)
-            .HasValue<BookItem>((int)MediaKind.Book)
-            .HasValue<AudioItem>((int)MediaKind.Audio);
+            .HasValue<BookItem>((int)MediaKind.Book);
     }
 }
 

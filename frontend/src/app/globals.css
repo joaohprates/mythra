@@ -43,7 +43,7 @@
   --radius-mythra-card: 14px;
   --radius-mythra-pill: 999px;
 
-  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-sans: var(--font-display, "Plus Jakarta Sans"), system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 }
 
 @layer base {

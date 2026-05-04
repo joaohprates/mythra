@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Bell, Search, Sparkles, Telescope, ListMusic, BarChart2, ShieldAlert, ChevronDown, Heart } from "lucide-react";
+import { Bell, Search, Sparkles, Telescope, ListMusic, BarChart2, ChevronDown, Heart } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/store/auth";
@@ -9,7 +9,6 @@ import { cn } from "@/lib/cn";
 import { ProfileBadge } from "./ProfileBadge";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useLocaleStore, useTranslation } from "@/store/locale";
-import { useProfilePrefs } from "@/store/profile";
 import { LOCALES, type Locale } from "@/lib/i18n";
 
 export function Topbar() {
@@ -39,7 +38,6 @@ export function Topbar() {
   const { unreadCount } = useNotifications();
   const t = useTranslation();
   const { locale, setLocale } = useLocaleStore();
-  const { showAdultContent } = useProfilePrefs();
 
   const currentLocale = LOCALES.find((l) => l.code === locale) ?? LOCALES[0];
 
@@ -76,19 +74,10 @@ export function Topbar() {
           <NavLink href="/library/all/Video" label={t("kind.video")} />
           <NavLink href="/library/all/Manga" label={t("kind.manga")} />
           <NavLink href="/library/all/Book" label={t("kind.book")} />
-          <NavLink href="/library/all/Audio" label={t("kind.audio")} />
           <NavLink href="/discover" label={t("nav.discover")} icon={<Telescope size={13} />} highlight />
           <NavLink href="/playlists" label={t("nav.playlists")} icon={<ListMusic size={13} />} />
           <NavLink href="/statistics" label={t("nav.statistics")} icon={<BarChart2 size={13} />} />
           <NavLink href="/favorites" label={t("nav.favorites")} icon={<Heart size={13} />} />
-          {showAdultContent && (
-            <NavLink
-              href="/adult"
-              label={t("nav.adult")}
-              icon={<ShieldAlert size={13} />}
-              adult
-            />
-          )}
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
@@ -149,7 +138,7 @@ export function Topbar() {
           <Link
             href="/notifications"
             className="relative flex h-10 w-10 items-center justify-center rounded-full text-mythra-text-muted hover:text-white hover:bg-white/5 transition-colors"
-            aria-label="Notifications"
+            aria-label={t("topbar.notifications")}
           >
             <Bell size={18} />
             {unreadCount > 0 && (
@@ -169,7 +158,7 @@ export function Topbar() {
               href="/login"
               className="rounded-full bg-gradient-to-r from-[#a855f7] to-[#3b82f6] px-5 py-2 text-sm font-medium text-white shadow-[0_18px_40px_-15px_rgba(168,85,247,0.7)] hover:shadow-[0_22px_55px_-15px_rgba(168,85,247,0.85)] transition-shadow"
             >
-              Sign in
+              {t("auth.signIn")}
             </Link>
           )}
         </div>

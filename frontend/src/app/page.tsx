@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clapperboard, FolderOpen, Loader2, Sparkles } from "lucide-react";
 import { Topbar } from "@/components/shell/Topbar";
@@ -10,7 +10,7 @@ import { HeroBanner } from "@/components/media/HeroBanner";
 import { ContentRow } from "@/components/media/ContentRow";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
-import { useProfilePrefs } from "@/store/profile";
+import { useTranslation } from "@/store/locale";
 import type { MediaItem, PlaybackProgress, ReadingProgressDto } from "@/lib/types";
 
 type RecommendationItem = {
@@ -25,57 +25,72 @@ type RecommendationItem = {
   reason: string;
 };
 
+const HOME_QUERY_OPTS = {
+  staleTime: 60_000,
+  refetchOnMount: "always" as const,
+  refetchOnWindowFocus: false,
+  retry: 2,
+};
+
 export default function HomePage() {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const isHydrated = useAuthStore((s) => s.isHydrated);
   const profile = useAuthStore((s) => s.activeProfile);
   const qc = useQueryClient();
+  const t = useTranslation();
 
   useEffect(() => {
     if (isHydrated && !accessToken) router.replace("/login");
   }, [isHydrated, accessToken, router]);
 
-  const { showAdultContent } = useProfilePrefs();
+  // Refresh stale persisted query cache once after hydration completes.
+  const didInvalidateRef = useRef(false);
+  useEffect(() => {
+    if (didInvalidateRef.current) return;
+    if (isHydrated && accessToken) {
+      didInvalidateRef.current = true;
+      qc.invalidateQueries();
+    }
+  }, [isHydrated, accessToken, qc]);
 
-  // When adult content is disabled, explicitly filter it out from all queries
-  const adultFilter = showAdultContent ? undefined : false;
+  const tokenReady = isHydrated && !!accessToken;
+  const profileReady = isHydrated && !!profile;
 
   const recentVideo = useQuery({
-    queryKey: ["recent", "Video", adultFilter],
+    queryKey: ["recent", "Video"],
     queryFn: async () =>
-      (await api.get<{ items: MediaItem[] }>("/items", { params: { take: 18, orderBy: "-added", isAdult: adultFilter } })).data.items,
-    enabled: !!accessToken,
+      (await api.get<{ items: MediaItem[] }>("/items", { params: { take: 18, orderBy: "-added", includeAdult: true } })).data.items,
+    enabled: tokenReady,
+    ...HOME_QUERY_OPTS,
   });
 
   const trendingMovies = useQuery({
-    queryKey: ["videos", "movies", adultFilter],
-    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Video", take: 18, isAdult: adultFilter } })).data.items,
-    enabled: !!accessToken,
+    queryKey: ["videos", "movies"],
+    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Video", take: 18, includeAdult: true } })).data.items,
+    enabled: tokenReady,
+    ...HOME_QUERY_OPTS,
   });
 
   const animeRow = useQuery({
-    queryKey: ["videos", "anime", adultFilter],
-    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Video", search: "anime", take: 18, isAdult: adultFilter } })).data.items,
-    enabled: !!accessToken,
+    queryKey: ["videos", "anime"],
+    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Video", search: "anime", take: 18, includeAdult: true } })).data.items,
+    enabled: tokenReady,
+    ...HOME_QUERY_OPTS,
   });
 
   const mangaRow = useQuery({
-    queryKey: ["mangas", adultFilter],
-    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Manga", take: 18, isAdult: adultFilter } })).data.items,
-    enabled: !!accessToken,
+    queryKey: ["mangas"],
+    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Manga", take: 18, includeAdult: true } })).data.items,
+    enabled: tokenReady,
+    ...HOME_QUERY_OPTS,
   });
 
   const bookRow = useQuery({
-    queryKey: ["books", adultFilter],
-    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Book", take: 18, isAdult: adultFilter } })).data.items,
-    enabled: !!accessToken,
-  });
-
-  const audioRow = useQuery({
-    queryKey: ["audio", adultFilter],
-    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Audio", take: 18, isAdult: adultFilter } })).data.items,
-    enabled: !!accessToken,
+    queryKey: ["books"],
+    queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Book", take: 18, includeAdult: true } })).data.items,
+    enabled: tokenReady,
+    ...HOME_QUERY_OPTS,
   });
 
   const continueWatching = useQuery({
@@ -89,7 +104,8 @@ export default function HomePage() {
       const itemMap = new Map(result.items.map((i) => [i.id, i]));
       return progress.map((p) => itemMap.get(p.mediaItemId)).filter((i): i is MediaItem => !!i);
     },
-    enabled: !!profile,
+    enabled: profileReady,
+    ...HOME_QUERY_OPTS,
   });
 
   const continueReading = useQuery({
@@ -98,7 +114,8 @@ export default function HomePage() {
       if (!profile) return [];
       return (await api.get<ReadingProgressDto[]>(`/profiles/${profile.id}/continue-reading`)).data;
     },
-    enabled: !!profile,
+    enabled: profileReady,
+    ...HOME_QUERY_OPTS,
   });
 
   const recommendations = useQuery({
@@ -107,10 +124,22 @@ export default function HomePage() {
       if (!profile) return [];
       return (await api.get<RecommendationItem[]>("/recommendations", { params: { profileId: profile.id, take: 18 } })).data;
     },
-    enabled: !!profile,
+    enabled: profileReady,
+    ...HOME_QUERY_OPTS,
   });
 
-  const heroItems = (recentVideo.data ?? []).slice(0, 5);
+  // Hero fallback: prefer recentVideo; if empty, walk other rows for a non-empty source.
+  const heroSource =
+    (recentVideo.data && recentVideo.data.length > 0 && recentVideo.data) ||
+    (trendingMovies.data && trendingMovies.data.length > 0 && trendingMovies.data) ||
+    (animeRow.data && animeRow.data.length > 0 && animeRow.data) ||
+    (mangaRow.data && mangaRow.data.length > 0 && mangaRow.data) ||
+    (bookRow.data && bookRow.data.length > 0 && bookRow.data) ||
+    [];
+  const heroItems = heroSource.slice(0, 5);
+
+  // Reference unused query so lint stays happy and data still warms the cache.
+  void continueReading;
 
   return (
     <>
@@ -120,11 +149,11 @@ export default function HomePage() {
 
         <div className="space-y-12">
           {continueWatching.data && continueWatching.data.length > 0 && (
-            <ContentRow title="Continue Watching" subtitle="Continue de onde parou" items={continueWatching.data} size="md" />
+            <ContentRow title={t("home.row.continueWatching")} subtitle={t("home.row.continueWatching.sub")} items={continueWatching.data} size="md" />
           )}
           {(recommendations.data?.length ?? 0) > 0 && (
             <ContentRow
-              title="Recomendado Para Você"
+              title={t("home.row.recommended")}
               subtitle={recommendations.data?.[0]?.reason}
               items={(recommendations.data ?? []).map((r) => ({
                 id: r.id,
@@ -141,12 +170,11 @@ export default function HomePage() {
               size="md"
             />
           )}
-          <ContentRow title="Adicionados Recentemente" subtitle="Novidades no seu universo" items={recentVideo.data ?? []} size="md" loading={recentVideo.isLoading} />
-          <ContentRow title="Filmes & Séries" items={trendingMovies.data ?? []} size="md" loading={trendingMovies.isLoading} />
-          {(animeRow.data?.length ?? 0) > 0 && <ContentRow title="Anime" items={animeRow.data ?? []} size="md" />}
-          {(mangaRow.data?.length ?? 0) > 0 && <ContentRow title="Mangá" items={mangaRow.data ?? []} size="sm" />}
-          {(bookRow.data?.length ?? 0) > 0 && <ContentRow title="Livros" items={bookRow.data ?? []} size="sm" />}
-          {(audioRow.data?.length ?? 0) > 0 && <ContentRow title="Music" items={audioRow.data ?? []} size="md" />}
+          <ContentRow title={t("home.row.recent")} subtitle={t("home.row.recent.sub")} items={recentVideo.data ?? []} size="md" loading={recentVideo.isLoading} />
+          <ContentRow title={t("home.row.movies")} items={trendingMovies.data ?? []} size="md" loading={trendingMovies.isLoading} />
+          {(animeRow.data?.length ?? 0) > 0 && <ContentRow title={t("home.row.anime")} items={animeRow.data ?? []} size="md" />}
+          {(mangaRow.data?.length ?? 0) > 0 && <ContentRow title={t("home.row.manga")} items={mangaRow.data ?? []} size="sm" />}
+          {(bookRow.data?.length ?? 0) > 0 && <ContentRow title={t("home.row.books")} items={bookRow.data ?? []} size="sm" />}
         </div>
 
         {!recentVideo.isLoading && (recentVideo.data?.length ?? 0) === 0 && (
@@ -161,6 +189,7 @@ function EmptyState({ onDemoLoaded }: { onDemoLoaded: () => void }) {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const t = useTranslation();
 
   const loadDemo = async () => {
     setLoading(true);
@@ -171,7 +200,7 @@ function EmptyState({ onDemoLoaded }: { onDemoLoaded: () => void }) {
       setTimeout(onDemoLoaded, 800);
     } catch (e) {
       const msg = (e as { response?: { data?: { detail?: string } } }).response?.data?.detail;
-      setErr(msg ?? "Failed to load demo content.");
+      setErr(msg ?? t("home.empty.demoError"));
     } finally {
       setLoading(false);
     }
@@ -184,15 +213,14 @@ function EmptyState({ onDemoLoaded }: { onDemoLoaded: () => void }) {
         <span className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-mythra-purple via-mythra-blue to-mythra-magenta mythra-glow-purple">
           <Clapperboard size={24} className="text-white" />
         </span>
-        <h3 className="text-2xl font-semibold gradient-text">Your universe awaits</h3>
+        <h3 className="text-2xl font-semibold gradient-text">{t("home.empty.title")}</h3>
         <p className="mt-3 text-sm text-mythra-text-muted">
-          Load a curated set of popular movies instantly — no files needed. They stream via external
-          providers so you can explore Mythra right away.
+          {t("home.empty.body")}
         </p>
 
         {done ? (
           <p className="mt-5 flex items-center justify-center gap-2 text-sm text-emerald-400">
-            <Sparkles size={16} /> Demo library loaded! Refreshing…
+            <Sparkles size={16} /> {t("home.empty.demoLoaded")}
           </p>
         ) : (
           <>
@@ -202,7 +230,7 @@ function EmptyState({ onDemoLoaded }: { onDemoLoaded: () => void }) {
               className="mt-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-mythra-purple via-[#7c3aed] to-mythra-blue px-6 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_-15px_rgba(168,85,247,0.7)] transition hover:scale-[1.02] disabled:cursor-wait disabled:opacity-70"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-              {loading ? "Loading…" : "Load demo content"}
+              {loading ? t("home.empty.demoLoading") : t("home.empty.demoCta")}
             </button>
             {err && <p className="mt-3 text-xs text-rose-300">{err}</p>}
           </>
@@ -216,20 +244,14 @@ function EmptyState({ onDemoLoaded }: { onDemoLoaded: () => void }) {
             <FolderOpen size={18} className="text-mythra-text-muted" />
           </span>
           <div>
-            <h4 className="font-semibold">Add your own media</h4>
+            <h4 className="font-semibold">{t("home.empty.localTitle")}</h4>
             <p className="mt-1 text-sm text-mythra-text-muted">
-              Put your files inside the <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white">media/</code>{" "}
-              folder next to <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white">docker-compose.yml</code>,
-              then go to{" "}
-              <a href="/settings" className="text-mythra-purple underline-offset-2 hover:underline">Settings → Libraries</a>{" "}
-              and create a library pointing to <code className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white">/media</code>.
-              Hit <strong>Scan</strong> and your content appears here.
+              {t("home.empty.localBody")}
             </p>
             <ul className="mt-3 space-y-1 text-xs text-mythra-text-soft">
               <li>🎬 <strong>Videos:</strong> .mp4 .mkv .m4v .mov .avi .webm</li>
               <li>📚 <strong>Books:</strong> .epub .pdf .mobi .azw3</li>
               <li>🖼 <strong>Manga:</strong> .cbz .cbr archives in per-series folders</li>
-              <li>🎧 <strong>Audiobooks:</strong> .mp3 .flac .m4a .ogg</li>
             </ul>
           </div>
         </div>

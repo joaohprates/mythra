@@ -1,12 +1,12 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Search, Telescope, Star, BookOpen, Film, Music, BookImage, Tv2,
-  Download, Check, Loader2, ShieldAlert, TrendingUp, Award,
+  Search, Telescope, Star, BookOpen, Film, BookImage, Tv2,
+  Download, Check, Loader2, ShieldAlert, TrendingUp, Award, Lock,
 } from "lucide-react";
 import Link from "next/link";
 import { Topbar } from "@/components/shell/Topbar";
@@ -15,84 +15,154 @@ import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import { useTranslation } from "@/store/locale";
 import { useProfilePrefs } from "@/store/profile";
+import { SmartImage } from "@/components/ui/SmartImage";
+import { useToasts } from "@/store/toasts";
 import type { DiscoverItem, DiscoverResult, ImportResultDto, MediaKind } from "@/lib/types";
+import type { TranslationKey } from "@/lib/i18n";
 
-type DiscoverType = "movie" | "series" | "anime" | "manga" | "book" | "music";
+type DiscoverType = "movie" | "series" | "anime" | "manga" | "book";
 
 type Tab = {
   id: DiscoverType;
   kind: MediaKind;
-  label: string;
+  labelKey: TranslationKey;
   icon: React.ReactNode;
 };
 
 const TABS: Tab[] = [
-  { id: "movie",  kind: "Video",  label: "Movies",   icon: <Film size={14} /> },
-  { id: "series", kind: "Video",  label: "TV",       icon: <Tv2 size={14} /> },
-  { id: "anime",  kind: "Video",  label: "Anime",    icon: <Tv2 size={14} /> },
-  { id: "book",   kind: "Book",   label: "Books",    icon: <BookOpen size={14} /> },
-  { id: "manga",  kind: "Manga",  label: "Manga",    icon: <BookImage size={14} /> },
-  { id: "music",  kind: "Audio",  label: "Music",    icon: <Music size={14} /> },
+  { id: "movie",  kind: "Video",  labelKey: "discover.tab.movie",  icon: <Film size={14} /> },
+  { id: "series", kind: "Video",  labelKey: "discover.tab.series", icon: <Tv2 size={14} /> },
+  { id: "anime",  kind: "Video",  labelKey: "discover.tab.anime",  icon: <Tv2 size={14} /> },
+  { id: "book",   kind: "Book",   labelKey: "discover.tab.book",   icon: <BookOpen size={14} /> },
+  { id: "manga",  kind: "Manga",  labelKey: "discover.tab.manga",  icon: <BookImage size={14} /> },
 ];
 
-const CATEGORIES: { id: string; label: string; icon: React.ReactNode }[] = [
-  { id: "popular",  label: "Popular",  icon: <Star size={12} /> },
-  { id: "trending", label: "Trending", icon: <TrendingUp size={12} /> },
-  { id: "rating",   label: "Top",      icon: <Award size={12} /> },
+const CATEGORIES: { id: string; labelKey: TranslationKey; icon: React.ReactNode }[] = [
+  { id: "popular",  labelKey: "discover.category.popular",  icon: <Star size={12} /> },
+  { id: "trending", labelKey: "discover.category.trending", icon: <TrendingUp size={12} /> },
+  { id: "rating",   labelKey: "discover.category.top",      icon: <Award size={12} /> },
 ];
 
 const PAGE_SIZE = 20;
+const VALID_TAB_IDS = new Set<DiscoverType>(["movie", "series", "anime", "manga", "book"]);
+const VALID_CATEGORIES = new Set(["popular", "trending", "rating"]);
+
+function readHashState(): { tab: DiscoverType; cat: string; q: string; page: number } {
+  if (typeof window === "undefined") {
+    return { tab: "movie", cat: "popular", q: "", page: 1 };
+  }
+  const hash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const params = new URLSearchParams(hash);
+  const tabRaw = params.get("tab") ?? "movie";
+  const tab = (VALID_TAB_IDS.has(tabRaw as DiscoverType) ? tabRaw : "movie") as DiscoverType;
+  const catRaw = params.get("cat") ?? "popular";
+  const cat = VALID_CATEGORIES.has(catRaw) ? catRaw : "popular";
+  const q = params.get("q") ?? "";
+  const pageRaw = parseInt(params.get("page") ?? "1", 10);
+  const page = Number.isFinite(pageRaw) && pageRaw >= 1 ? pageRaw : 1;
+  return { tab, cat, q, page };
+}
+
+function buildHash(state: { tab: DiscoverType; cat: string; q: string; page: number }): string {
+  const params = new URLSearchParams();
+  params.set("tab", state.tab);
+  params.set("cat", state.cat);
+  if (state.q) params.set("q", state.q);
+  if (state.page > 1) params.set("page", String(state.page));
+  return params.toString();
+}
 
 export default function DiscoverPage() {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const isHydrated = useAuthStore((s) => s.isHydrated);
   const t = useTranslation();
-  const { showAdultContent, setShowAdultContent } = useProfilePrefs();
+  const { showAdultContent } = useProfilePrefs();
 
-  const [activeTabId, setActiveTabId] = useState<DiscoverType>("movie");
-  const [category, setCategory] = useState<string>("popular");
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const initial = typeof window !== "undefined" ? readHashState() : { tab: "movie" as DiscoverType, cat: "popular", q: "", page: 1 };
+
+  const [activeTabId, setActiveTabId] = useState<DiscoverType>(initial.tab);
+  const [category, setCategory] = useState<string>(initial.cat);
+  const [query, setQuery] = useState(initial.q);
+  const [debouncedQuery, setDebouncedQuery] = useState(initial.q);
   const [importing, setImporting] = useState<Set<string>>(new Set());
   const [imported, setImported] = useState<Map<string, string>>(new Map());
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initial.page);
 
-  const activeTab = TABS.find((t) => t.id === activeTabId) ?? TABS[0];
+  const activeTab = TABS.find((tab) => tab.id === activeTabId) ?? TABS[0];
+
+  // Sync state to URL hash
+  const skipNextHashSync = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (skipNextHashSync.current) {
+      skipNextHashSync.current = false;
+      return;
+    }
+    const next = buildHash({ tab: activeTabId, cat: category, q: debouncedQuery, page });
+    const target = `#${next}`;
+    if (window.location.hash !== target) {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${target}`);
+    }
+  }, [activeTabId, category, debouncedQuery, page]);
+
+  // Listen to hashchange for back/forward
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onHashChange = () => {
+      const s = readHashState();
+      skipNextHashSync.current = true;
+      setActiveTabId(s.tab);
+      setCategory(s.cat);
+      setQuery(s.q);
+      setDebouncedQuery(s.q);
+      setPage(s.page);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
   useEffect(() => {
     if (isHydrated && !accessToken) router.replace("/login");
   }, [isHydrated, accessToken, router]);
 
   useEffect(() => {
-    const timer = setTimeout(() => { setDebouncedQuery(query); setPage(1); }, 450);
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+      setPage(1);
+    }, 300);
     return () => clearTimeout(timer);
   }, [query]);
-
-  // Reset page when tab/category changes
-  useEffect(() => { setPage(1); }, [activeTabId, category]);
 
   const isSearching = debouncedQuery.trim().length >= 2;
 
   const discoverQuery = useQuery({
     queryKey: ["discover", activeTabId, category, debouncedQuery, page],
     queryFn: async () => {
-      const params: Record<string, string | number> = {
+      const params: Record<string, string | number | boolean> = {
         type: activeTabId,
         kind: activeTab.kind,
         category,
         page,
         take: PAGE_SIZE,
+        includeAdult: true,
       };
       if (isSearching) params.q = debouncedQuery.trim();
       const res = await api.get<DiscoverResult>("/discover", { params });
       return res.data;
     },
     enabled: !!accessToken,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
     placeholderData: (prev) => prev,
-    retry: 1,
+    retry: 2,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
+
+  const qc = useQueryClient();
+  const pushToast = useToasts((s) => s.push);
 
   const importItem = async (item: DiscoverItem) => {
     setImporting((s) => new Set(s).add(item.externalId));
@@ -104,8 +174,37 @@ export default function DiscoverPage() {
         targetLibraryId: null,
       });
       setImported((m) => new Map(m).set(item.externalId, res.data.id));
-    } catch {
-      // import errors are surfaced in the card UI via the disabled state
+      qc.invalidateQueries({ queryKey: ["library"] });
+      qc.invalidateQueries({ queryKey: ["recent"] });
+      qc.invalidateQueries({ queryKey: ["videos"] });
+      qc.invalidateQueries({ queryKey: ["mangas"] });
+      qc.invalidateQueries({ queryKey: ["books"] });
+      pushToast({
+        kind: "success",
+        message: t("discover.import.success", { title: res.data.title ?? item.title }),
+        action: {
+          label: t("discover.import.successAction"),
+          onClick: () => router.push(`/item/${res.data.id}`),
+        },
+      });
+      // Redirect to IMDb-style detail page (no auto-player).
+      router.push(`/item/${res.data.id}`);
+    } catch (e) {
+      const detail =
+        (e as { response?: { data?: { detail?: string; title?: string } } })
+          ?.response?.data;
+      const message = detail?.detail ?? detail?.title;
+      pushToast({
+        kind: "error",
+        message: message
+          ? t("discover.import.error", { message })
+          : t("discover.import.errorFallback"),
+        duration: 8000,
+        action: {
+          label: t("discover.import.retry"),
+          onClick: () => importItem(item),
+        },
+      });
     } finally {
       setImporting((s) => { const ns = new Set(s); ns.delete(item.externalId); return ns; });
     }
@@ -114,10 +213,7 @@ export default function DiscoverPage() {
   if (!isHydrated || !accessToken) return null;
 
   const data = discoverQuery.data;
-  const allResults = data?.items ?? [];
-  const results = showAdultContent
-    ? allResults
-    : allResults.filter((i) => !i.isAdult);
+  const results = data?.items ?? [];
 
   const isLoading = discoverQuery.isLoading;
   const isFetching = discoverQuery.isFetching;
@@ -142,19 +238,6 @@ export default function DiscoverPage() {
               </div>
             </div>
 
-            <button
-              onClick={() => setShowAdultContent(!showAdultContent)}
-              className={
-                "flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition-all " +
-                (showAdultContent
-                  ? "border-red-400/40 bg-red-500/15 text-red-300 hover:bg-red-500/25"
-                  : "border-white/10 bg-white/[0.04] text-mythra-text-muted hover:bg-white/[0.08] hover:text-white")
-              }
-              title={showAdultContent ? t("discover.adult.toggle.off") : t("discover.adult.toggle.on")}
-            >
-              <ShieldAlert size={13} />
-              {showAdultContent ? t("discover.adult.toggle.off") : t("discover.adult.toggle.on")}
-            </button>
           </div>
         </motion.div>
 
@@ -163,7 +246,12 @@ export default function DiscoverPage() {
           {TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => { setActiveTabId(tab.id); setQuery(""); setDebouncedQuery(""); }}
+              onClick={() => {
+                setActiveTabId(tab.id);
+                setQuery("");
+                setDebouncedQuery("");
+                setPage(1);
+              }}
               className={
                 "flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-all " +
                 (activeTabId === tab.id
@@ -171,7 +259,7 @@ export default function DiscoverPage() {
                   : "text-mythra-text-muted hover:text-white")
               }
             >
-              {tab.icon} {tab.label}
+              {tab.icon} {t(tab.labelKey)}
             </button>
           ))}
         </div>
@@ -182,7 +270,7 @@ export default function DiscoverPage() {
             {CATEGORIES.map((c) => (
               <button
                 key={c.id}
-                onClick={() => setCategory(c.id)}
+                onClick={() => { setCategory(c.id); setPage(1); }}
                 className={
                   "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all " +
                   (category === c.id
@@ -190,7 +278,7 @@ export default function DiscoverPage() {
                     : "border-white/10 bg-white/[0.02] text-mythra-text-muted hover:text-white")
                 }
               >
-                {c.icon} {c.label}
+                {c.icon} {t(c.labelKey)}
               </button>
             ))}
           </div>
@@ -202,7 +290,7 @@ export default function DiscoverPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={`${t("action.search")} ${activeTab.label.toLowerCase()}…`}
+            placeholder={`${t("action.search")} ${t(activeTab.labelKey).toLowerCase()}…`}
             className="w-full rounded-2xl border border-white/10 bg-white/[0.03] py-3 pl-11 pr-4 text-sm outline-none placeholder:text-white/30 focus:border-mythra-purple/50 transition-colors"
           />
           {(isLoading || isFetching) && (
@@ -210,34 +298,17 @@ export default function DiscoverPage() {
           )}
         </div>
 
-        {/* Adult content hidden notice */}
-        {!showAdultContent && allResults.some((i) => i.isAdult) && (
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-3 flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-300"
-          >
-            <ShieldAlert size={12} />
-            {allResults.filter((i) => i.isAdult).length} adult items hidden.{" "}
-            <button
-              onClick={() => setShowAdultContent(true)}
-              className="underline underline-offset-2 hover:text-amber-200"
-            >
-              {t("action.show")}
-            </button>
-          </motion.div>
-        )}
-
         {/* Title */}
         {!isLoading && results.length > 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6">
             <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-mythra-text-soft">
               <Star size={14} className="text-amber-400" />
               {isSearching
-                ? t("discover.noResults", { query: debouncedQuery }).replace(/\.+$/, "").startsWith("No") || isSearching
-                  ? `Results for "${debouncedQuery}"`
-                  : t("discover.trending")
-                : CATEGORIES.find((c) => c.id === category)?.label ?? t("discover.trending")}
+                ? t("discover.results.for", { query: debouncedQuery })
+                : (() => {
+                    const cat = CATEGORIES.find((c) => c.id === category);
+                    return cat ? t(cat.labelKey) : t("discover.trending");
+                  })()}
             </h2>
           </motion.div>
         )}
@@ -269,7 +340,7 @@ export default function DiscoverPage() {
               onClick={() => discoverQuery.refetch()}
               className="mt-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs hover:bg-white/[0.08]"
             >
-              {t("common.error")} — retry
+              {t("discover.retry")}
             </button>
           </motion.div>
         )}
@@ -321,15 +392,15 @@ export default function DiscoverPage() {
               disabled={page <= 1 || isFetching}
               className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium text-white disabled:opacity-30"
             >
-              ← Previous
+              ← {t("discover.prev")}
             </button>
-            <span className="text-xs text-mythra-text-muted">Page {page}</span>
+            <span className="text-xs text-mythra-text-muted">{t("discover.page", { page: String(page) })}</span>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={results.length < PAGE_SIZE || isFetching}
               className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium text-white disabled:opacity-30"
             >
-              Next →
+              {t("discover.next")} →
             </button>
           </div>
         )}
@@ -362,11 +433,12 @@ function DiscoverCard({
     >
       <div className="relative aspect-[2/3] overflow-hidden bg-white/[0.04]">
         {item.posterPath ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <SmartImage
             src={item.posterPath}
             alt={item.title}
             className={`h-full w-full object-cover transition-all duration-500 group-hover:scale-105 ${isBlurred ? "blur-xl scale-110" : ""}`}
+            style={isBlurred ? { filter: "blur(24px) brightness(0.6)" } : undefined}
+            fallbackKind="poster"
           />
         ) : (
           <div className="flex h-full items-center justify-center text-white/10">
@@ -376,12 +448,13 @@ function DiscoverCard({
 
         {isBlurred && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50">
+            <Lock size={20} className="text-white/70" />
             <span className="rounded-full border border-red-400/40 bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-red-300">
               {t("discover.adult.badge")}
             </span>
             <button
-              onClick={(e) => { e.stopPropagation(); setAdultRevealed(true); }}
-              className="text-[11px] text-white/60 underline underline-offset-2 hover:text-white"
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); setAdultRevealed(true); }}
+              className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-medium text-white hover:bg-white/20"
             >
               {t("discover.adult.show")}
             </button>

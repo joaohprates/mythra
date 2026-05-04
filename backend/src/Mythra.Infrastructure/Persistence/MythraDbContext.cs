@@ -3,7 +3,6 @@ using Mythra.Application.Abstractions.Persistence;
 using Mythra.Domain.Common;
 using Mythra.Domain.Libraries;
 using Mythra.Domain.Media;
-using Mythra.Domain.Media.Audio;
 using Mythra.Domain.Media.Books;
 using Mythra.Domain.Media.Manga;
 using Mythra.Domain.Media.Video;
@@ -31,13 +30,11 @@ public sealed class MythraDbContext(DbContextOptions<MythraDbContext> options) :
     public DbSet<VideoItem> Videos => Set<VideoItem>();
     public DbSet<MangaItem> Mangas => Set<MangaItem>();
     public DbSet<BookItem> Books => Set<BookItem>();
-    public DbSet<AudioItem> Audios => Set<AudioItem>();
     public DbSet<Subtitle> Subtitles => Set<Subtitle>();
     public DbSet<AudioTrack> AudioTracks => Set<AudioTrack>();
     public DbSet<ChapterMarker> ChapterMarkers => Set<ChapterMarker>();
     public DbSet<MangaChapter> MangaChapters => Set<MangaChapter>();
     public DbSet<BookChapter> BookChapters => Set<BookChapter>();
-    public DbSet<AudioChapter> AudioChapters => Set<AudioChapter>();
 
     public DbSet<Genre> Genres => Set<Genre>();
     public DbSet<Tag> Tags => Set<Tag>();

@@ -1,7 +1,9 @@
+using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http.Resilience;
 using Mythra.Application.Abstractions.Addons;
 using Mythra.Application.Abstractions.Auth;
 using Mythra.Application.Abstractions.Background;
@@ -36,6 +38,9 @@ public static class DependencyInjection
         services.Configure<MetadataOptions>(config.GetSection(MetadataOptions.SectionName));
         services.Configure<ExternalProvidersOptions>(config.GetSection(ExternalProvidersOptions.SectionName));
 
+        // In-memory cache used by Discover, Cinemeta, and other infra services.
+        services.AddMemoryCache();
+
         var connectionString = config.GetConnectionString("Default")
             ?? "Data Source=mythra.db;Cache=Shared;Foreign Keys=true;";
         services.AddDbContext<MythraDbContext>(opt =>
@@ -52,7 +57,6 @@ public static class DependencyInjection
         services.AddScoped<IVideoRepository, VideoRepository>();
         services.AddScoped<IMangaRepository, MangaRepository>();
         services.AddScoped<IBookRepository, BookRepository>();
-        services.AddScoped<IAudioRepository, AudioRepository>();
         services.AddScoped<IGenreRepository, GenreRepository>();
         services.AddScoped<ITagRepository, TagRepository>();
         services.AddScoped<IPlaybackProgressRepository, PlaybackProgressRepository>();
@@ -76,34 +80,41 @@ public static class DependencyInjection
 
         var metaOpts = config.GetSection(MetadataOptions.SectionName).Get<MetadataOptions>() ?? new MetadataOptions();
 
+        // Aggressive timeouts for upstream metadata HTTP calls — Discover should
+        // never block longer than 8s on a single provider.
         services.AddHttpClient<TmdbMetadataProvider>(c =>
         {
             c.BaseAddress = new Uri(metaOpts.TmdbBaseUrl.TrimEnd('/') + "/");
-            c.Timeout = TimeSpan.FromSeconds(15);
-        });
+            c.Timeout = TimeSpan.FromSeconds(8);
+        }).ConfigurePrimaryHttpMessageHandler(BuildFastHandler).AddResilience();
         services.AddHttpClient<AniListMetadataProvider>(c =>
         {
-            c.Timeout = TimeSpan.FromSeconds(15);
-        });
+            c.BaseAddress = new Uri(metaOpts.AniListBaseUrl ?? "https://graphql.anilist.co");
+            c.Timeout = TimeSpan.FromSeconds(8);
+        }).ConfigurePrimaryHttpMessageHandler(BuildFastHandler).AddResilience();
         services.AddHttpClient<OpenLibraryMetadataProvider>(c =>
         {
             c.BaseAddress = new Uri(metaOpts.OpenLibraryBaseUrl.TrimEnd('/') + "/");
-            c.Timeout = TimeSpan.FromSeconds(15);
+            c.Timeout = TimeSpan.FromSeconds(8);
             c.DefaultRequestHeaders.UserAgent.ParseAdd("Mythra/0.1 (https://mythra.local)");
-        });
+        }).ConfigurePrimaryHttpMessageHandler(BuildFastHandler).AddResilience();
         services.AddHttpClient<CinemetaMetadataProvider>(c =>
         {
             c.BaseAddress = new Uri(metaOpts.CinemetaBaseUrl.TrimEnd('/') + "/");
-            c.Timeout = TimeSpan.FromSeconds(15);
+            c.Timeout = TimeSpan.FromSeconds(8);
             c.DefaultRequestHeaders.UserAgent.ParseAdd("Mythra/0.1 (https://mythra.local)");
-        });
+        }).ConfigurePrimaryHttpMessageHandler(BuildFastHandler).AddResilience();
+        services.AddHttpClient<GoogleBooksMetadataProvider>(c =>
+        {
+            c.BaseAddress = new Uri("https://www.googleapis.com/books/v1/");
+            c.Timeout = TimeSpan.FromSeconds(8);
+        }).AddResilience();
 
         services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<CinemetaMetadataProvider>());
         services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<TmdbMetadataProvider>());
         services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<AniListMetadataProvider>());
         services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<OpenLibraryMetadataProvider>());
-        services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<SpotifyMetadataProvider>());
-        services.AddSingleton<SpotifyMetadataProvider>();
+        services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<GoogleBooksMetadataProvider>());
 
         // Catalog browsing capability — Cinemeta is the primary, AniList augments anime catalogs.
         services.AddSingleton<ICatalogProvider>(sp => sp.GetRequiredService<CinemetaMetadataProvider>());
@@ -111,20 +122,14 @@ public static class DependencyInjection
 
         services.AddSingleton<IMetadataProviderRegistry, MetadataProviderRegistry>();
 
-        // Named HTTP clients for Spotify OAuth
-        services.AddHttpClient("SpotifyAuth", c => { c.Timeout = TimeSpan.FromSeconds(15); });
-        services.AddHttpClient("SpotifyApi", c => { c.Timeout = TimeSpan.FromSeconds(15); });
-
         // Register each concrete scanner as itself so GeneralLibraryScanner can inject them directly,
         // then forward each as IMediaScanner for the registry's IEnumerable<IMediaScanner>.
         services.AddScoped<VideoLibraryScanner>();
         services.AddScoped<BookLibraryScanner>();
         services.AddScoped<MangaLibraryScanner>();
-        services.AddScoped<AudioLibraryScanner>();
         services.AddScoped<IMediaScanner>(sp => sp.GetRequiredService<VideoLibraryScanner>());
         services.AddScoped<IMediaScanner>(sp => sp.GetRequiredService<BookLibraryScanner>());
         services.AddScoped<IMediaScanner>(sp => sp.GetRequiredService<MangaLibraryScanner>());
-        services.AddScoped<IMediaScanner>(sp => sp.GetRequiredService<AudioLibraryScanner>());
         services.AddScoped<IMediaScanner, GeneralLibraryScanner>();
         services.AddScoped<IMediaScannerRegistry, MediaScannerRegistry>();
 
@@ -133,68 +138,30 @@ public static class DependencyInjection
         services.AddHostedService<LibraryWatcherService>();
 
         // ── External content providers ──────────────────────────────────────────
-
-        var extOpts = config.GetSection(ExternalProvidersOptions.SectionName)
-                            .Get<ExternalProvidersOptions>() ?? new ExternalProvidersOptions();
-
-        // Video providers (priority order: Videasy → Vidapi → Vidsrc → Consumet → ArchiveOrg)
-        services.AddSingleton<VideasyProvider>();
-        services.AddSingleton<IExternalVideoProvider>(sp => sp.GetRequiredService<VideasyProvider>());
-        services.AddSingleton<VidapiProvider>();
-        services.AddSingleton<IExternalVideoProvider>(sp => sp.GetRequiredService<VidapiProvider>());
-        services.AddSingleton<VidsrcProvider>();
-        services.AddSingleton<IExternalVideoProvider>(sp => sp.GetRequiredService<VidsrcProvider>());
-
-        services.AddHttpClient<ConsumetProvider>(c =>
-        {
-            c.BaseAddress = new Uri(extOpts.ConsumetBaseUrl);
-            c.Timeout     = TimeSpan.FromSeconds(20);
-        });
-        services.AddSingleton<IExternalVideoProvider>(sp => sp.GetRequiredService<ConsumetProvider>());
-
-        services.AddHttpClient<ArchiveOrgProvider>(c =>
-        {
-            c.BaseAddress = new Uri(extOpts.ArchiveOrgBaseUrl);
-            c.Timeout     = TimeSpan.FromSeconds(15);
-        });
-        services.AddSingleton<IExternalVideoProvider>(sp => sp.GetRequiredService<ArchiveOrgProvider>());
-
-        // Book / audio / manga providers
-        services.AddHttpClient<GutenbergProvider>(c =>
-        {
-            c.BaseAddress = new Uri(extOpts.GutendexBaseUrl);
-            c.Timeout     = TimeSpan.FromSeconds(15);
-        });
-        services.AddSingleton<IExternalBookProvider>(sp => sp.GetRequiredService<GutenbergProvider>());
-
-        services.AddHttpClient<LibriVoxProvider>(c =>
-        {
-            c.BaseAddress = new Uri(extOpts.LibriVoxBaseUrl);
-            c.Timeout     = TimeSpan.FromSeconds(15);
-        });
-        services.AddSingleton<IExternalBookProvider>(sp => sp.GetRequiredService<LibriVoxProvider>());
-
-        services.AddHttpClient<MangaDexProvider>(c =>
-        {
-            c.BaseAddress = new Uri(extOpts.MangaDexBaseUrl);
-            c.Timeout     = TimeSpan.FromSeconds(15);
-            c.DefaultRequestHeaders.UserAgent.ParseAdd("Mythra/0.1 (https://mythra.local)");
-        });
-        services.AddSingleton<IExternalBookProvider>(sp => sp.GetRequiredService<MangaDexProvider>());
+        // Built-in pirate/streaming providers were removed; they will return as
+        // user-installable addons. The IExternalVideoProvider / IExternalBookProvider
+        // DI lists are intentionally empty by default. Addons may register implementations.
 
         // Orchestrator service (Application layer, needs scoped repo — register as Scoped)
         services.AddScoped<IExternalProviderService, ExternalProviderService>();
 
         // ── Addon system ────────────────────────────────────────────────────────
-        services.AddMemoryCache();
 
         // Named HttpClient used by OmdbMetadataProvider instances.
-        services.AddHttpClient("OmdbMetadata", c => { c.Timeout = TimeSpan.FromSeconds(15); });
+        services.AddHttpClient("OmdbMetadata", c => { c.Timeout = TimeSpan.FromSeconds(8); }).AddResilience();
 
         // Generic pool for the DLL-loading addon sandbox (AddonHost).
-        services.AddHttpClient("AddonHttpClient", c => { c.Timeout = TimeSpan.FromSeconds(20); });
+        services.AddHttpClient("AddonHttpClient", c => { c.Timeout = TimeSpan.FromSeconds(20); }).AddResilience();
+
+        // Image proxy: lets the API rewrite/cache external poster URLs so the
+        // frontend can render them even when the user's ISP blocks the CDN.
+        services.AddHttpClient("ImageProxy", c => c.Timeout = TimeSpan.FromSeconds(10)).AddResilience();
 
         services.Configure<AddonOptions>(config.GetSection(AddonOptions.SectionName));
+
+        // Runtime registries that addon-loaded providers register into.
+        services.AddSingleton<IAddonStreamSourceRegistry, AddonStreamSourceRegistry>();
+        services.AddSingleton<IAddonBookSourceRegistry,   AddonBookSourceRegistry>();
 
         // IAddonActivator: maps ProviderType strings to live provider instances.
         services.AddSingleton<IAddonActivator, AddonActivator>();
@@ -208,5 +175,32 @@ public static class DependencyInjection
         services.AddHostedService(sp => sp.GetRequiredService<AddonHost>());
 
         return services;
+    }
+
+    private static HttpMessageHandler BuildFastHandler() => new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        ConnectTimeout           = TimeSpan.FromSeconds(4),
+        AutomaticDecompression   = DecompressionMethods.All,
+    };
+
+    /// <summary>
+    /// Standard Polly resilience for every external HTTP call we make.
+    /// Retries with jitter, attempt + total timeouts, and a circuit breaker.
+    /// </summary>
+    private static IHttpClientBuilder AddResilience(this IHttpClientBuilder builder)
+    {
+        builder.AddStandardResilienceHandler(o =>
+        {
+            o.Retry.MaxRetryAttempts = 3;
+            o.Retry.UseJitter = true;
+            o.Retry.Delay = TimeSpan.FromMilliseconds(400);
+            o.AttemptTimeout.Timeout = TimeSpan.FromSeconds(6);
+            o.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(20);
+            o.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
+            o.CircuitBreaker.FailureRatio = 0.5;
+            o.CircuitBreaker.MinimumThroughput = 5;
+        });
+        return builder;
     }
 }

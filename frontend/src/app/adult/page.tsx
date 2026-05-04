@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ShieldAlert, Film, BookImage, BookOpen, Music, Settings } from "lucide-react";
+import { ShieldAlert, Film, BookImage, BookOpen, Settings } from "lucide-react";
 import Link from "next/link";
 import { Topbar } from "@/components/shell/Topbar";
 import { PageScaffold } from "@/components/shell/PageScaffold";
@@ -33,30 +33,23 @@ export default function AdultPage() {
   const enabled = ready && showAdultContent && !!accessToken;
 
   const videos = useQuery({
-    queryKey: ["adult", "video"],
+    queryKey: ["adult", "video", showAdultContent],
     queryFn: async () =>
       (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Video", isAdult: true, take: 18 } })).data.items,
     enabled,
   });
 
   const manga = useQuery({
-    queryKey: ["adult", "manga"],
+    queryKey: ["adult", "manga", showAdultContent],
     queryFn: async () =>
       (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Manga", isAdult: true, take: 18 } })).data.items,
     enabled,
   });
 
   const books = useQuery({
-    queryKey: ["adult", "book"],
+    queryKey: ["adult", "book", showAdultContent],
     queryFn: async () =>
       (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Book", isAdult: true, take: 18 } })).data.items,
-    enabled,
-  });
-
-  const audio = useQuery({
-    queryKey: ["adult", "audio"],
-    queryFn: async () =>
-      (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Audio", isAdult: true, take: 18 } })).data.items,
     enabled,
   });
 
@@ -93,8 +86,7 @@ export default function AdultPage() {
   const hasContent =
     (videos.data?.length ?? 0) +
     (manga.data?.length ?? 0) +
-    (books.data?.length ?? 0) +
-    (audio.data?.length ?? 0) > 0;
+    (books.data?.length ?? 0) > 0;
 
   return (
     <>
@@ -120,7 +112,6 @@ export default function AdultPage() {
             { icon: <Film size={16} />, label: t("kind.video"),  href: "#video" },
             { icon: <BookImage size={16} />, label: t("kind.manga"), href: "#manga" },
             { icon: <BookOpen size={16} />, label: t("kind.book"),  href: "#books" },
-            { icon: <Music size={16} />, label: t("kind.audio"),  href: "#audio" },
           ].map((c) => (
             <a
               key={c.href}
@@ -133,7 +124,7 @@ export default function AdultPage() {
         </div>
 
         {!hasContent &&
-          !videos.isLoading && !manga.isLoading && !books.isLoading && !audio.isLoading && (
+          !videos.isLoading && !manga.isLoading && !books.isLoading && (
           <div className="mt-24 flex flex-col items-center gap-4 text-center">
             <ShieldAlert size={48} className="text-mythra-text-muted/20" />
             <p className="text-mythra-text-muted">{t("library.empty")}</p>
@@ -160,11 +151,6 @@ export default function AdultPage() {
         <div className="space-y-12 mt-12" id="books">
           {(books.data?.length ?? 0) > 0 && (
             <ContentRow title={t("kind.book")} items={books.data ?? []} size="sm" loading={books.isLoading} />
-          )}
-        </div>
-        <div className="space-y-12 mt-12" id="audio">
-          {(audio.data?.length ?? 0) > 0 && (
-            <ContentRow title={t("kind.audio")} items={audio.data ?? []} size="md" loading={audio.isLoading} />
           )}
         </div>
       </PageScaffold>

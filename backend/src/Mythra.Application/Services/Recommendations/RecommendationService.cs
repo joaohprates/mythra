@@ -90,7 +90,7 @@ public sealed class RecommendationService(
 
     public async Task<Result<IReadOnlyList<ProviderHealthDto>>> GetProviderHealthAsync(CancellationToken ct = default)
     {
-        var kinds = new[] { MediaKind.Video, MediaKind.Book, MediaKind.Manga, MediaKind.Audio };
+        var kinds = new[] { MediaKind.Video, MediaKind.Book, MediaKind.Manga };
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var results = new List<ProviderHealthDto>();
 

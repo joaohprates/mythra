@@ -25,7 +25,9 @@ public sealed record ExternalStreamRequest(
     string?   AniListId    = null,
     string?   ArchiveOrgId = null,
     int?      Season       = null,
-    int?      Episode      = null);
+    int?      Episode      = null,
+    bool      IsSeries     = false,
+    bool      IsAnime      = false);
 
 /// <summary>A playable URL resolved by a provider.</summary>
 public sealed record ExternalStreamResult(

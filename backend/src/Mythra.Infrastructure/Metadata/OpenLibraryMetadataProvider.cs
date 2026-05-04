@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Mythra.Application.Abstractions.Metadata;
 using Mythra.Domain.Media;
@@ -13,8 +14,11 @@ namespace Mythra.Infrastructure.Metadata;
 /// </summary>
 public sealed class OpenLibraryMetadataProvider(
     HttpClient http,
+    IMemoryCache cache,
     ILogger<OpenLibraryMetadataProvider> log) : IMetadataProvider
 {
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(10);
+
     public string Name => "openlibrary";
     public bool Supports(MediaKind kind) => kind == MediaKind.Book;
 
@@ -28,7 +32,9 @@ public sealed class OpenLibraryMetadataProvider(
 
         try
         {
-            var json = await http.GetFromJsonAsync<JsonElement>(url, ct);
+            var jsonStr = await GetJsonCachedAsync(url, ct);
+            if (jsonStr is null) return [];
+            var json = JsonSerializer.Deserialize<JsonElement>(jsonStr);
             if (!json.TryGetProperty("docs", out var docs)) return [];
 
             var results = new List<MetadataSearchResult>();
@@ -46,6 +52,17 @@ public sealed class OpenLibraryMetadataProvider(
         }
     }
 
+    private async Task<string?> GetJsonCachedAsync(string url, CancellationToken ct)
+    {
+        var key = $"openlibrary:{url}";
+        if (cache.TryGetValue(key, out string? json) && json is not null) return json;
+        var resp = await http.GetAsync(url, ct);
+        if (!resp.IsSuccessStatusCode) return null;
+        json = await resp.Content.ReadAsStringAsync(ct);
+        cache.Set(key, json, CacheTtl);
+        return json;
+    }
+
     public async Task<MetadataSearchResult?> GetByIdAsync(
         string providerId, MediaKind kind, CancellationToken ct = default)
     {
@@ -58,7 +75,9 @@ public sealed class OpenLibraryMetadataProvider(
 
         try
         {
-            var json = await http.GetFromJsonAsync<JsonElement>($"{workId}.json", ct);
+            var jsonStr = await GetJsonCachedAsync($"{workId}.json", ct);
+            if (jsonStr is null) return null;
+            var json = JsonSerializer.Deserialize<JsonElement>(jsonStr);
             return TryMapWork(json, workId.Split('/').Last());
         }
         catch (Exception ex)

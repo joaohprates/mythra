@@ -1,6 +1,5 @@
 using Mythra.Application.Dtos.Media;
 using Mythra.Domain.Media;
-using Mythra.Domain.Media.Audio;
 using Mythra.Domain.Media.Books;
 using Mythra.Domain.Media.Manga;
 using Mythra.Domain.Media.Video;
@@ -102,22 +101,4 @@ public static class MediaMappings
             .ToList(),
         Kind: "Book",
         IsExternal: string.IsNullOrWhiteSpace(b.FilePath));
-
-    public static AudioItemDto ToDetail(this AudioItem a) => new(
-        a.Id,
-        a.LibraryId,
-        a.Title,
-        a.Author,
-        a.Narrator,
-        a.Series,
-        a.SeriesIndex,
-        a.AudioKind,
-        a.Duration,
-        a.CoverPath,
-        a.Overview,
-        a.Chapters.OrderBy(c => c.Order)
-            .Select(c => new AudioChapterDto(c.Id, c.Order, c.Title, c.Start, c.Duration))
-            .ToList(),
-        Kind: "Audio",
-        IsExternal: string.IsNullOrWhiteSpace(a.RootPath));
 }
