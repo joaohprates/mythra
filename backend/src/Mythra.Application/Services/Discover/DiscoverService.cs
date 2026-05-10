@@ -21,6 +21,7 @@ public sealed class DiscoverService(
     IVideoRepository videoRepo,
     IBookRepository bookRepo,
     IMangaRepository mangaRepo,
+    IGenreRepository genreRepo,
     INotificationService notificationService,
     IUnitOfWork uow,
     IMemoryCache cache,
@@ -102,7 +103,7 @@ public sealed class DiscoverService(
     }
 
     private static string BuildCacheKey(DiscoverQuery q) =>
-        $"discover:{q.Type}:{(int)q.Kind}:{q.Category}:{(q.Query ?? "").ToLowerInvariant()}:{q.Skip}:{q.Take}:{q.Provider ?? ""}";
+        $"discover:{q.Type}:{(int)q.Kind}:{q.Category}:{(q.Query ?? "").ToLowerInvariant()}:{q.Genre ?? ""}:{q.Skip}:{q.Take}:{q.Provider ?? ""}";
 
     private async Task<(IReadOnlyList<MetadataSearchResult> Results, string Provider)> BrowseCatalogAsync(
         DiscoverQuery q, CancellationToken ct)
@@ -113,17 +114,27 @@ public sealed class DiscoverService(
 
         if (providers.Count > 0)
         {
-            // Fan out in parallel; preserve provider priority order when picking the first non-empty result.
+            // Fan out in parallel; merge all providers' results, deduplicate by ProviderId.
             var tasks = providers
                 .Select(p => SafeCatalogCallAsync(p, q, ct))
                 .ToArray();
             var allResults = await Task.WhenAll(tasks);
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var merged = new List<MetadataSearchResult>();
+            var primaryName = string.Empty;
             for (var i = 0; i < providers.Count; i++)
             {
-                var items = allResults[i];
-                if (items.Count > 0)
-                    return (items, providers[i].Name);
+                foreach (var item in allResults[i])
+                {
+                    if (!seen.Add(item.ProviderId)) continue;
+                    merged.Add(item);
+                    if (primaryName.Length == 0) primaryName = providers[i].Name;
+                }
             }
+
+            if (merged.Count > 0)
+                return (merged, primaryName);
         }
 
         // Fallback to any matching IMetadataProvider's empty-query search (rare path).
@@ -146,7 +157,7 @@ public sealed class DiscoverService(
     {
         try
         {
-            return await p.GetCatalogAsync(q.Kind, q.Type, q.Category, q.Skip, q.Take, ct);
+            return await p.GetCatalogAsync(q.Kind, q.Type, q.Category, q.Skip, q.Take, q.Genre, ct);
         }
         catch (Exception ex)
         {
@@ -206,10 +217,11 @@ public sealed class DiscoverService(
         }
         catch (Exception ex)
         {
+            var inner = ex.GetBaseException();
             log.LogError(ex,
-                "Discover import failed for {Provider}:{ExternalId} ({Kind})",
-                req.ProviderKind, req.ExternalId, req.MediaKind);
-            return Error.Internal($"Import failed: {ex.Message}");
+                "Discover import failed for {Provider}:{ExternalId} ({Kind}): {InnerMessage}",
+                req.ProviderKind, req.ExternalId, req.MediaKind, inner.Message);
+            return Error.Internal($"Import failed: {inner.Message}");
         }
     }
 
@@ -260,13 +272,33 @@ public sealed class DiscoverService(
             _               => throw new InvalidOperationException("Unsupported media kind"),
         };
 
-        foreach (var g in metadata.Genres)
-            if (!created.Genres.Any(existing => existing.Name == g))
-                created.Genres.Add(new Domain.Media.Genre(g));
+        // Resolve genres via repository to avoid unique-constraint violations when the
+        // same genre (by slug) already exists in the database from a previous import.
+        var allGenreNames = metadata.Genres.ToList();
+        if (metadata.IsAdult && !allGenreNames.Any(g => g is "Adult Content" or "Hentai" or "Ecchi" or "Adult"))
+            allGenreNames.Add("Adult Content");
 
-        // Surface the adult flag through the genres list so the IsAdult filter works.
-        if (metadata.IsAdult && !created.Genres.Any(g => g.Name is "Adult Content" or "Hentai" or "Ecchi" or "Adult"))
-            created.Genres.Add(new Domain.Media.Genre("Adult Content"));
+        var resolvedGenres = await genreRepo.GetOrCreateManyAsync(allGenreNames, ct);
+        foreach (var g in resolvedGenres)
+            if (!created.Genres.Any(existing => existing.Id == g.Id))
+                created.Genres.Add(g);
+
+        if (metadata.Cast is { Count: > 0 })
+        {
+            foreach (var cm in metadata.Cast)
+            {
+                var person = new Person { Name = cm.Name, ProviderTmdbId = cm.ProviderTmdbId };
+                created.People.Add(new MediaPersonRole
+                {
+                    MediaItemId = created.Id,
+                    PersonId = person.Id,
+                    Person = person,
+                    Role = cm.Role,
+                    Character = cm.Character,
+                    Order = cm.Order,
+                });
+            }
+        }
 
         switch (created)
         {

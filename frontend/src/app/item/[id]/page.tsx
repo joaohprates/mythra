@@ -15,6 +15,8 @@ import { useTranslation } from "@/store/locale";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { useHasDownloadAddon, useHasStreamAddon } from "@/hooks/useAddonCapabilities";
 import { DownloadDialog } from "@/components/media/DownloadDialog";
+import { AddToPlaylistModal } from "@/components/media/AddToPlaylistModal";
+import { useAutoTranslate } from "@/hooks/useAutoTranslate";
 
 interface ItemAny {
   id: string;
@@ -42,6 +44,7 @@ interface ItemAny {
   imdbId?: string | null;
   parentId?: string | null;
   language?: string | null;
+  cast?: Array<{ name: string; role: string; character?: string | null; photoPath?: string | null; order: number }> | null;
 }
 
 /** Resolve the capability map key for a given item. */
@@ -83,6 +86,8 @@ export default function ItemDetailPage() {
   useEffect(() => {
     if (isHydrated && !accessToken) router.replace("/login");
   }, [isHydrated, accessToken, router]);
+
+  const [showPlaylist, setShowPlaylist] = useState(false);
 
   const detail = useQuery({
     queryKey: ["item-detail", params.id],
@@ -177,15 +182,11 @@ export default function ItemDetailPage() {
                     )}
                   </div>
 
-                  {item.overview && (
-                    <p className="mt-5 max-w-3xl text-sm leading-relaxed text-mythra-text-muted md:text-base whitespace-pre-line">
-                      {cleanDescription(item.overview)}
-                    </p>
-                  )}
+                  <OverviewText text={item.overview} className="mt-5 max-w-3xl text-sm leading-relaxed text-mythra-text-muted md:text-base whitespace-pre-line" />
 
                   <div className="mt-7 flex flex-wrap gap-3">
                     {!isSeries && <PrimaryAction item={item} />}
-                    <ActionBtn label={t("item.action.playlist")} icon={<Bookmark size={16} />} />
+                    <ActionBtn label={t("item.action.playlist")} icon={<Bookmark size={16} />} onClick={() => setShowPlaylist(true)} />
                     <Link
                       href={`/library/all/${item.kind}`}
                       className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/[0.08]"
@@ -205,8 +206,31 @@ export default function ItemDetailPage() {
                       ))}
                     </div>
                   )}
+
+                  {item.cast && item.cast.length > 0 && (
+                    <div className="mt-8">
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-mythra-text-soft">Cast</h3>
+                      <div className="flex flex-wrap gap-3">
+                        {item.cast.slice(0, 12).map((c, i) => (
+                          <div key={i} className="flex flex-col items-center gap-1 text-center">
+                            <div className="grid h-12 w-12 place-items-center overflow-hidden rounded-full border border-white/10 bg-white/[0.04] text-sm font-semibold text-mythra-text-muted">
+                              {c.name.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="max-w-[80px] truncate text-[11px] font-medium text-white">{c.name}</p>
+                              {c.character && (
+                                <p className="max-w-[80px] truncate text-[10px] text-mythra-text-soft">{c.character}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              <AddToPlaylistModal itemId={item.id} open={showPlaylist} onClose={() => setShowPlaylist(false)} />
 
               {/* ── Series episodes (Netflix-style) ── */}
               {isSeries && (
@@ -385,11 +409,7 @@ function EpisodeRow({ ep }: { ep: EpisodeDto }) {
             <span className="ml-auto shrink-0 text-xs text-mythra-text-soft">{formatDuration(ep.duration)}</span>
           )}
         </div>
-        {ep.overview && (
-          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-mythra-text-muted whitespace-pre-line">
-            {cleanDescription(ep.overview)}
-          </p>
-        )}
+        <OverviewText text={ep.overview} className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-mythra-text-muted whitespace-pre-line" />
         {/* Streaming badge */}
         {!ep.hasFile && (
           <span className="mt-2 self-start rounded-full border border-mythra-purple/30 bg-mythra-purple/10 px-2 py-0.5 text-[10px] text-mythra-purple">
@@ -399,6 +419,15 @@ function EpisodeRow({ ep }: { ep: EpisodeDto }) {
       </div>
     </motion.div>
   );
+}
+
+// ── OverviewText ─────────────────────────────────────────────────────────────
+
+function OverviewText({ text, className }: { text?: string | null; className?: string }) {
+  const cleaned = cleanDescription(text ?? "");
+  const translated = useAutoTranslate(cleaned || null);
+  if (!translated) return null;
+  return <p className={className}>{translated}</p>;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -432,10 +461,20 @@ function PrimaryAction({ item }: { item: ItemAny }) {
   const t = useTranslation();
   const capabilityKey = resolveCapabilityKey(item);
   const hasStreamAddon = useHasStreamAddon(capabilityKey);
-  const hasFile = item.hasFile !== false;
+  // Treat item as having a local file only when explicitly confirmed: either
+  // hasFile is true or fileStatus is "Available". External-only items have
+  // fileStatus="ExternalOnly" and hasFile=false, so the button is suppressed
+  // unless a streaming addon is registered for this media kind.
+  const hasFile =
+    item.hasFile === true ||
+    (item.fileStatus === "Available") ||
+    (item.fileStatus == null && item.hasFile !== false);
 
   // Spec: when no local file AND no streaming addon for this kind → render nothing
   // (no Play button, no hint banner).
+  // Books cannot be streamed externally — only show read button when local file exists
+  if (item.kind === "Book" && !hasFile) return null;
+
   if (!hasFile && !hasStreamAddon) {
     return null;
   }

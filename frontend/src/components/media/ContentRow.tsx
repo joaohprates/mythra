@@ -3,7 +3,6 @@
 import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useRef } from "react";
-import { stagger } from "@/lib/motion";
 import type { MediaItem, SearchHit } from "@/lib/types";
 import { MediaCard } from "./MediaCard";
 
@@ -48,26 +47,24 @@ export function ContentRow({ title, subtitle, items, size = "md", loading }: Pro
         </div>
       </div>
 
-      <motion.div
+      <div
         ref={ref}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, margin: "-10% 0px" }}
-        variants={stagger(0.04)}
         className="no-scrollbar -mx-2 flex gap-4 overflow-x-auto px-2 pb-4 snap-x snap-mandatory"
       >
         {loading
           ? Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} size={size} />)
-          : items.map((item) => (
+          : items.map((item, i) => (
               <motion.div
                 key={item.id}
-                variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } }}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: Math.min(i, 10) * 0.05 }}
                 className="snap-start"
               >
                 <MediaCard item={item} size={size} />
               </motion.div>
             ))}
-      </motion.div>
+      </div>
     </section>
   );
 }

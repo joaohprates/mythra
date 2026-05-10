@@ -1,7 +1,8 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -47,9 +48,9 @@ const PAGE_SIZE = 20;
 const VALID_TAB_IDS = new Set<DiscoverType>(["movie", "series", "anime", "manga", "book"]);
 const VALID_CATEGORIES = new Set(["popular", "trending", "rating"]);
 
-function readHashState(): { tab: DiscoverType; cat: string; q: string; page: number } {
+function readHashState(): { tab: DiscoverType; cat: string; q: string; genre: string } {
   if (typeof window === "undefined") {
-    return { tab: "movie", cat: "popular", q: "", page: 1 };
+    return { tab: "movie", cat: "popular", q: "", genre: "" };
   }
   const hash = window.location.hash.startsWith("#")
     ? window.location.hash.slice(1)
@@ -60,17 +61,16 @@ function readHashState(): { tab: DiscoverType; cat: string; q: string; page: num
   const catRaw = params.get("cat") ?? "popular";
   const cat = VALID_CATEGORIES.has(catRaw) ? catRaw : "popular";
   const q = params.get("q") ?? "";
-  const pageRaw = parseInt(params.get("page") ?? "1", 10);
-  const page = Number.isFinite(pageRaw) && pageRaw >= 1 ? pageRaw : 1;
-  return { tab, cat, q, page };
+  const genre = params.get("genre") ?? "";
+  return { tab, cat, q, genre };
 }
 
-function buildHash(state: { tab: DiscoverType; cat: string; q: string; page: number }): string {
+function buildHash(state: { tab: DiscoverType; cat: string; q: string; genre: string }): string {
   const params = new URLSearchParams();
   params.set("tab", state.tab);
   params.set("cat", state.cat);
   if (state.q) params.set("q", state.q);
-  if (state.page > 1) params.set("page", String(state.page));
+  if (state.genre) params.set("genre", state.genre);
   return params.toString();
 }
 
@@ -81,19 +81,24 @@ export default function DiscoverPage() {
   const t = useTranslation();
   const { showAdultContent } = useProfilePrefs();
 
-  const initial = typeof window !== "undefined" ? readHashState() : { tab: "movie" as DiscoverType, cat: "popular", q: "", page: 1 };
+  const initial = typeof window !== "undefined" ? readHashState() : { tab: "movie" as DiscoverType, cat: "popular", q: "", genre: "" };
 
   const [activeTabId, setActiveTabId] = useState<DiscoverType>(initial.tab);
   const [category, setCategory] = useState<string>(initial.cat);
   const [query, setQuery] = useState(initial.q);
   const [debouncedQuery, setDebouncedQuery] = useState(initial.q);
+  const [genre, setGenre] = useState(initial.genre);
   const [importing, setImporting] = useState<Set<string>>(new Set());
   const [imported, setImported] = useState<Map<string, string>>(new Map());
-  const [page, setPage] = useState(initial.page);
+
+  // Accumulated load-more state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [allItems, setAllItems] = useState<DiscoverItem[]>([]);
+  const [hasMore, setHasMore] = useState(true);
 
   const activeTab = TABS.find((tab) => tab.id === activeTabId) ?? TABS[0];
 
-  // Sync state to URL hash
+  // Sync state to URL hash (no page in hash)
   const skipNextHashSync = useRef(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -101,12 +106,12 @@ export default function DiscoverPage() {
       skipNextHashSync.current = false;
       return;
     }
-    const next = buildHash({ tab: activeTabId, cat: category, q: debouncedQuery, page });
+    const next = buildHash({ tab: activeTabId, cat: category, q: debouncedQuery, genre });
     const target = `#${next}`;
     if (window.location.hash !== target) {
       window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${target}`);
     }
-  }, [activeTabId, category, debouncedQuery, page]);
+  }, [activeTabId, category, debouncedQuery]);
 
   // Listen to hashchange for back/forward
   useEffect(() => {
@@ -118,7 +123,7 @@ export default function DiscoverPage() {
       setCategory(s.cat);
       setQuery(s.q);
       setDebouncedQuery(s.q);
-      setPage(s.page);
+      setGenre(s.genre);
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -131,35 +136,63 @@ export default function DiscoverPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(query);
-      setPage(1);
     }, 300);
     return () => clearTimeout(timer);
   }, [query]);
 
+  // Reset accumulated items whenever filter parameters change
+  const filterFingerprint = `${activeTabId}|${category}|${debouncedQuery}|${genre}`;
+  const lastFingerprintRef = useRef(filterFingerprint);
+  useEffect(() => {
+    if (lastFingerprintRef.current === filterFingerprint) return;
+    lastFingerprintRef.current = filterFingerprint;
+    setCurrentPage(1);
+    setAllItems([]);
+    setHasMore(true);
+  }, [filterFingerprint]);
+
   const isSearching = debouncedQuery.trim().length >= 2;
 
-  const discoverQuery = useQuery({
-    queryKey: ["discover", activeTabId, category, debouncedQuery, page],
+  const pageQuery = useQuery({
+    queryKey: ["discover", activeTabId, category, debouncedQuery, genre, currentPage],
     queryFn: async () => {
       const params: Record<string, string | number | boolean> = {
         type: activeTabId,
         kind: activeTab.kind,
         category,
-        page,
+        page: currentPage,
         take: PAGE_SIZE,
         includeAdult: true,
       };
       if (isSearching) params.q = debouncedQuery.trim();
+      if (genre.trim()) params.genre = genre.trim();
       const res = await api.get<DiscoverResult>("/discover", { params });
       return res.data;
     },
     enabled: !!accessToken,
     staleTime: 30_000,
-    placeholderData: (prev) => prev,
     retry: 2,
     refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
+
+  // Accumulate results from each page
+  useEffect(() => {
+    if (!pageQuery.isSuccess || !pageQuery.data) return;
+    const items = pageQuery.data.items ?? [];
+    // Only accumulate if the fingerprint still matches (prevents stale appends)
+    if (lastFingerprintRef.current !== filterFingerprint) return;
+    if (currentPage === 1) {
+      setAllItems(items);
+    } else {
+      setAllItems((prev) => {
+        const seen = new Set(prev.map((i) => i.externalId));
+        return [...prev, ...items.filter((i) => !seen.has(i.externalId))];
+      });
+    }
+    setHasMore(items.length >= PAGE_SIZE);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageQuery.data, pageQuery.isSuccess]);
 
   const qc = useQueryClient();
   const pushToast = useToasts((s) => s.push);
@@ -187,7 +220,6 @@ export default function DiscoverPage() {
           onClick: () => router.push(`/item/${res.data.id}`),
         },
       });
-      // Redirect to IMDb-style detail page (no auto-player).
       router.push(`/item/${res.data.id}`);
     } catch (e) {
       const detail =
@@ -212,13 +244,10 @@ export default function DiscoverPage() {
 
   if (!isHydrated || !accessToken) return null;
 
-  const data = discoverQuery.data;
-  const results = data?.items ?? [];
-
-  const isLoading = discoverQuery.isLoading;
-  const isFetching = discoverQuery.isFetching;
-  const error = discoverQuery.error;
-  const showEmpty = !isLoading && !isFetching && results.length === 0 && !error;
+  const isLoading = pageQuery.isLoading && currentPage === 1;
+  const isFetchingMore = pageQuery.isFetching && currentPage > 1;
+  const error = pageQuery.error && allItems.length === 0;
+  const showEmpty = !pageQuery.isLoading && !pageQuery.isFetching && allItems.length === 0 && !pageQuery.error;
 
   return (
     <>
@@ -237,7 +266,6 @@ export default function DiscoverPage() {
                 <p className="text-sm text-mythra-text-muted">{t("discover.subtitle")}</p>
               </div>
             </div>
-
           </div>
         </motion.div>
 
@@ -250,7 +278,7 @@ export default function DiscoverPage() {
                 setActiveTabId(tab.id);
                 setQuery("");
                 setDebouncedQuery("");
-                setPage(1);
+                setGenre("");
               }}
               className={
                 "flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-all " +
@@ -270,7 +298,7 @@ export default function DiscoverPage() {
             {CATEGORIES.map((c) => (
               <button
                 key={c.id}
-                onClick={() => { setCategory(c.id); setPage(1); }}
+                onClick={() => setCategory(c.id)}
                 className={
                   "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all " +
                   (category === c.id
@@ -285,21 +313,39 @@ export default function DiscoverPage() {
         )}
 
         {/* Search bar */}
-        <div className="mt-4 relative">
-          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-mythra-text-muted" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={`${t("action.search")} ${t(activeTab.labelKey).toLowerCase()}…`}
-            className="w-full rounded-2xl border border-white/10 bg-white/[0.03] py-3 pl-11 pr-4 text-sm outline-none placeholder:text-white/30 focus:border-mythra-purple/50 transition-colors"
-          />
-          {(isLoading || isFetching) && (
-            <Loader2 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-mythra-text-muted" />
-          )}
+        <div className="mt-4 flex gap-2">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-mythra-text-muted" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={`${t("action.search")} ${t(activeTab.labelKey).toLowerCase()}…`}
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.03] py-3 pl-11 pr-4 text-sm outline-none placeholder:text-white/30 focus:border-mythra-purple/50 transition-colors"
+            />
+            {pageQuery.isFetching && (
+              <Loader2 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-mythra-text-muted" />
+            )}
+          </div>
+          <div className="relative">
+            <input
+              value={genre}
+              onChange={(e) => setGenre(e.target.value)}
+              placeholder={t("discover.genrePlaceholder")}
+              className="w-36 rounded-2xl border border-white/10 bg-white/[0.03] py-3 px-4 text-sm outline-none placeholder:text-white/30 focus:border-mythra-blue/50 transition-colors"
+            />
+            {genre && (
+              <button
+                onClick={() => setGenre("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-mythra-text-muted hover:text-white"
+              >
+                <span className="text-xs">✕</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Title */}
-        {!isLoading && results.length > 0 && (
+        {!isLoading && allItems.length > 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6">
             <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-mythra-text-soft">
               <Star size={14} className="text-amber-400" />
@@ -313,7 +359,7 @@ export default function DiscoverPage() {
           </motion.div>
         )}
 
-        {/* Loading skeleton */}
+        {/* Loading skeleton (first page only) */}
         {isLoading && (
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -329,7 +375,7 @@ export default function DiscoverPage() {
           </div>
         )}
 
-        {/* Error state — show fallback UI but do not throw to the boundary */}
+        {/* Error state */}
         {error && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-16 flex flex-col items-center gap-3 text-center">
             <span className="grid h-14 w-14 place-items-center rounded-full bg-red-500/10 text-red-400">
@@ -337,7 +383,7 @@ export default function DiscoverPage() {
             </span>
             <p className="text-sm text-mythra-text-muted">{t("discover.error")}</p>
             <button
-              onClick={() => discoverQuery.refetch()}
+              onClick={() => pageQuery.refetch()}
               className="mt-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs hover:bg-white/[0.08]"
             >
               {t("discover.retry")}
@@ -361,46 +407,44 @@ export default function DiscoverPage() {
           </motion.div>
         )}
 
-        <AnimatePresence mode="wait">
-          {results.length > 0 && (
-            <motion.div
-              key={`${activeTabId}-${category}-${debouncedQuery}-${page}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-            >
-              {results.map((item) => (
-                <DiscoverCard
+        {/* Results grid */}
+        <AnimatePresence mode="popLayout">
+          {allItems.length > 0 && (
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {allItems.map((item, i) => (
+                <motion.div
                   key={`${item.providerKind}:${item.externalId}`}
-                  item={item}
-                  isImporting={importing.has(item.externalId)}
-                  importedId={imported.get(item.externalId) ?? item.existingItemId ?? null}
-                  onImport={() => importItem(item)}
-                  showAdultContent={showAdultContent}
-                />
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, delay: Math.min(i % PAGE_SIZE, 8) * 0.04 }}
+                  layout
+                >
+                  <DiscoverCard
+                    item={item}
+                    isImporting={importing.has(item.externalId)}
+                    importedId={imported.get(item.externalId) ?? item.existingItemId ?? null}
+                    onImport={() => importItem(item)}
+                    showAdultContent={showAdultContent}
+                  />
+                </motion.div>
               ))}
-            </motion.div>
+            </div>
           )}
         </AnimatePresence>
 
-        {/* Pagination — show whenever a full page came back */}
-        {results.length > 0 && (results.length === PAGE_SIZE || page > 1) && (
-          <div className="mt-8 flex items-center justify-center gap-3">
+        {/* Load more button */}
+        {allItems.length > 0 && hasMore && (
+          <div className="mt-10 flex justify-center">
             <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1 || isFetching}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium text-white disabled:opacity-30"
+              onClick={() => setCurrentPage((p) => p + 1)}
+              disabled={pageQuery.isFetching}
+              className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-8 py-3 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:opacity-50"
             >
-              ← {t("discover.prev")}
-            </button>
-            <span className="text-xs text-mythra-text-muted">{t("discover.page", { page: String(page) })}</span>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={results.length < PAGE_SIZE || isFetching}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium text-white disabled:opacity-30"
-            >
-              {t("discover.next")} →
+              {isFetchingMore ? (
+                <><Loader2 size={14} className="animate-spin" /> {t("action.loading")}</>
+              ) : (
+                t("discover.loadMore")
+              )}
             </button>
           </div>
         )}

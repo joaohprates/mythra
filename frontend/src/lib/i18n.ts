@@ -41,6 +41,7 @@ const translations = {
     "action.addToPlaylist":    "Add to playlist",
     "action.removeFromLib":    "Remove from library",
     "action.viewInLibrary":    "View in library",
+    "action.loading":          "Loading…",
 
     // Discover
     "discover.title":              "Discover",
@@ -69,6 +70,8 @@ const translations = {
     "discover.prev":               "Previous",
     "discover.next":               "Next",
     "discover.retry":              "Retry",
+    "discover.loadMore":           "Load more",
+    "discover.genrePlaceholder":   "Genre…",
     "discover.import.success":     "\"{title}\" imported.",
     "discover.import.successAction": "Open",
     "discover.import.error":       "Import failed: {message}",
@@ -367,6 +370,7 @@ const translations = {
     "action.addToPlaylist":    "Adicionar à playlist",
     "action.removeFromLib":    "Remover da biblioteca",
     "action.viewInLibrary":    "Ver na biblioteca",
+    "action.loading":          "Carregando…",
 
     // Descobrir
     "discover.title":              "Descobrir",
@@ -395,6 +399,8 @@ const translations = {
     "discover.prev":               "Anterior",
     "discover.next":               "Próximo",
     "discover.retry":              "Tentar de novo",
+    "discover.loadMore":           "Carregar mais",
+    "discover.genrePlaceholder":   "Gênero…",
     "discover.import.success":     "\"{title}\" importado.",
     "discover.import.successAction": "Abrir",
     "discover.import.error":       "Falha ao importar: {message}",

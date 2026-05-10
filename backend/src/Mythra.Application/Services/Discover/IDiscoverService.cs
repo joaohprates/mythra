@@ -52,7 +52,8 @@ public sealed record DiscoverQuery(
     string Category,     // "popular" | "trending" | "top" | "year" | "rating"
     int Skip,
     int Take,
-    string? Provider);
+    string? Provider,
+    string? Genre = null);
 
 public interface IDiscoverService
 {

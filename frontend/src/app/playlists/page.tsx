@@ -215,7 +215,7 @@ function PlaylistDetailView({
   const router = useRouter();
   const t = useTranslation();
 
-  const { data: playlist } = useQuery({
+  const { data: playlist, isError } = useQuery({
     queryKey: ["playlist", profileId, playlistId],
     queryFn: () => playlistApi.get(profileId, playlistId),
   });
@@ -227,6 +227,19 @@ function PlaylistDetailView({
       qc.invalidateQueries({ queryKey: ["playlists", profileId] });
     },
   });
+
+  if (isError)
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-3 text-center">
+        <p className="text-sm text-rose-400">Failed to load playlist.</p>
+        <button
+          onClick={onBack}
+          className="text-xs text-mythra-text-muted hover:text-white"
+        >
+          ← {t("common.back")}
+        </button>
+      </div>
+    );
 
   if (!playlist)
     return (

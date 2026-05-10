@@ -43,9 +43,10 @@ public sealed class AddonHost(
 
     // ── IAddonHost ────────────────────────────────────────────────────────────
 
-    public IReadOnlyList<IMetadataAddon>   MetadataAddons    => _entries.Values.Select(e => e.Addon).OfType<IMetadataAddon>().ToList();
+    public IReadOnlyList<IMetadataAddon>     MetadataAddons    => _entries.Values.Select(e => e.Addon).OfType<IMetadataAddon>().ToList();
     public IReadOnlyList<IStreamSourceAddon> StreamSourceAddons => _entries.Values.Select(e => e.Addon).OfType<IStreamSourceAddon>().ToList();
-    public IReadOnlyList<ISubtitleAddon>   SubtitleAddons    => _entries.Values.Select(e => e.Addon).OfType<ISubtitleAddon>().ToList();
+    public IReadOnlyList<IBookSourceAddon>   BookSourceAddons  => _entries.Values.Select(e => e.Addon).OfType<IBookSourceAddon>().ToList();
+    public IReadOnlyList<ISubtitleAddon>     SubtitleAddons    => _entries.Values.Select(e => e.Addon).OfType<ISubtitleAddon>().ToList();
 
     public IAddon? GetById(string addonId) =>
         _entries.TryGetValue(addonId, out var e) ? e.Addon : null;
@@ -201,7 +202,8 @@ public sealed class AddonHost(
             metadataRegistry.Unregister(addonId);
         if (entry.Addon is IStreamSourceAddon)
             streamSourceRegistry.Unregister(addonId);
-        bookSourceRegistry.Unregister(addonId);
+        if (entry.Addon is IBookSourceAddon)
+            bookSourceRegistry.Unregister(addonId);
 
         try { await entry.Addon.DisposeAsync(); }
         catch (Exception ex) { _log.LogWarning(ex, "Error disposing addon {Id}.", addonId); }
@@ -224,6 +226,12 @@ public sealed class AddonHost(
         {
             var bridge = new AddonStreamSourceBridge(streamAddon, loggerFactory.CreateLogger($"AddonStreamBridge.{addonId}"));
             streamSourceRegistry.Register(addonId, bridge);
+        }
+
+        if (addon is IBookSourceAddon bookAddon)
+        {
+            var bridge = new AddonBookSourceBridge(bookAddon, loggerFactory.CreateLogger($"AddonBookBridge.{addonId}"));
+            bookSourceRegistry.Register(addonId, bridge);
         }
 
         // ISubtitleAddon: registry pending — addon is still discovered via IAddonHost.SubtitleAddons.

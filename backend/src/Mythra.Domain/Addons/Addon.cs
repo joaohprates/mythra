@@ -2,7 +2,7 @@ using Mythra.Domain.Common;
 
 namespace Mythra.Domain.Addons;
 
-public enum AddonKind { MetadataProvider = 0, StreamSource = 1, SubtitleProvider = 2 }
+public enum AddonKind { MetadataProvider = 0, StreamSource = 1, SubtitleProvider = 2, BookSource = 3 }
 
 public enum AddonStatus { PendingSecrets = 0, Active = 1, Disabled = 2 }
 

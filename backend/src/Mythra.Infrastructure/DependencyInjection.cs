@@ -116,9 +116,11 @@ public static class DependencyInjection
         services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<OpenLibraryMetadataProvider>());
         services.AddSingleton<IMetadataProvider>(sp => sp.GetRequiredService<GoogleBooksMetadataProvider>());
 
-        // Catalog browsing capability — Cinemeta is the primary, AniList augments anime catalogs.
+        // Catalog browsing capability — TMDb + Cinemeta for video, AniList for anime/manga, OpenLibrary for books.
+        services.AddSingleton<ICatalogProvider>(sp => sp.GetRequiredService<TmdbMetadataProvider>());
         services.AddSingleton<ICatalogProvider>(sp => sp.GetRequiredService<CinemetaMetadataProvider>());
         services.AddSingleton<ICatalogProvider, AniListCatalogProvider>();
+        services.AddSingleton<ICatalogProvider>(sp => sp.GetRequiredService<OpenLibraryMetadataProvider>());
 
         services.AddSingleton<IMetadataProviderRegistry, MetadataProviderRegistry>();
 

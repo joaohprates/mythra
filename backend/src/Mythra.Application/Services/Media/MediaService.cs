@@ -96,5 +96,11 @@ public sealed class MediaService(
         await uow.SaveChangesAsync(ct);
         return Result.Success();
     }
+
+    public async Task<Result<Guid>> FindIdByExternalAsync(string externalId, CancellationToken ct = default)
+    {
+        var item = await media.GetByExternalIdAsync(externalId, ct);
+        return item is null ? Error.NotFound("MediaItem", externalId) : item.Id;
+    }
 }
 

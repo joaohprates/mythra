@@ -1,17 +1,18 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Search } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Topbar } from "@/components/shell/Topbar";
 import { PageScaffold } from "@/components/shell/PageScaffold";
 import { MediaCard } from "@/components/media/MediaCard";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/store/locale";
-import type { MediaKind, SearchResult } from "@/lib/types";
+import type { MediaKind, SearchHit, SearchResult } from "@/lib/types";
 
 const KINDS: MediaKind[] = ["Video", "Manga", "Book"];
+const PAGE_SIZE = 24;
 
 export default function SearchPage() {
   const t = useTranslation();
@@ -24,24 +25,32 @@ export default function SearchPage() {
     return () => clearTimeout(id);
   }, [query]);
 
-  const hasFilters = filterKinds.length > 0;
   const trimmedQuery = debounced.trim();
-  const shouldSearch = trimmedQuery.length > 0 || hasFilters;
 
-  const search = useQuery({
+  const search = useInfiniteQuery({
     queryKey: ["search", trimmedQuery, filterKinds],
-    queryFn: async () => {
-      if (!shouldSearch) return { hits: [], total: 0, elapsedMs: 0 } as SearchResult;
+    queryFn: async ({ pageParam }) => {
       const res = await api.post<SearchResult>("/search", {
-        query: trimmedQuery || "*",
+        query: trimmedQuery,
         kinds: filterKinds.length ? filterKinds : null,
-        skip: 0,
-        take: 60,
+        skip: pageParam,
+        take: PAGE_SIZE,
       });
       return res.data;
     },
-    enabled: shouldSearch,
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      const loaded = allPages.reduce((sum, p) => sum + p.hits.length, 0);
+      return loaded < lastPage.total ? loaded : undefined;
+    },
+    staleTime: 30_000,
   });
+
+  const allHits: SearchHit[] = search.data?.pages.flatMap((p) => p.hits) ?? [];
+  const total = search.data?.pages[0]?.total ?? 0;
+  const elapsedMs = search.data?.pages[search.data.pages.length - 1]?.elapsedMs ?? 0;
+  const hasMore = search.hasNextPage;
+  const isLoadingMore = search.isFetchingNextPage;
 
   const toggleKind = (k: MediaKind) =>
     setFilterKinds((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
@@ -95,35 +104,55 @@ export default function SearchPage() {
         </div>
 
         <div className="mt-12">
-          {search.data && search.data.hits.length === 0 && shouldSearch && !search.isFetching && (
+          {allHits.length === 0 && trimmedQuery.length > 0 && !search.isFetching && (
             <p className="text-center text-sm text-mythra-text-soft">
-              {t("search.noResults", { query: trimmedQuery || "—" })}
+              {t("search.noResults", { query: trimmedQuery })}
             </p>
           )}
-          {search.data && search.data.hits.length > 0 && (
+
+          {allHits.length > 0 && (
             <>
               <p className="mb-4 text-xs text-mythra-text-soft">
                 {t("search.results", {
-                  total: String(search.data.total),
-                  ms: search.data.elapsedMs.toFixed(0),
+                  total: String(total),
+                  ms: elapsedMs.toFixed(0),
                 })}
               </p>
-              <motion.div
-                initial="hidden"
-                animate="visible"
-                variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.04 } } }}
-                className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-5"
-              >
-                {search.data.hits.map((hit) => (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-5">
+                {allHits.map((hit, i) => (
                   <motion.div
                     key={hit.id}
-                    variants={{ hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0 } }}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25, delay: Math.min(i % PAGE_SIZE, 12) * 0.04 }}
                   >
                     <MediaCard item={hit} size="sm" />
                   </motion.div>
                 ))}
-              </motion.div>
+              </div>
+
+              {hasMore && (
+                <div className="mt-10 flex justify-center">
+                  <button
+                    onClick={() => search.fetchNextPage()}
+                    disabled={isLoadingMore}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-6 py-3 text-sm font-medium text-white backdrop-blur transition hover:bg-white/[0.08] disabled:opacity-50"
+                  >
+                    {isLoadingMore ? (
+                      <><Loader2 size={15} className="animate-spin" /> Carregando…</>
+                    ) : (
+                      "Carregar mais"
+                    )}
+                  </button>
+                </div>
+              )}
             </>
+          )}
+
+          {search.isFetching && !isLoadingMore && (
+            <div className="flex justify-center py-12">
+              <Loader2 size={24} className="animate-spin text-mythra-text-muted" />
+            </div>
           )}
         </div>
       </PageScaffold>

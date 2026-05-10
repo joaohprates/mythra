@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Bookmark, ChevronLeft, ChevronRight, Download, Sun, Type } from "lucide-react";
+import { Bookmark, ChevronLeft, ChevronRight, Download, Sun, Type, Menu } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -95,7 +95,7 @@ function EpubReader({ book, initialChapterId }: Props) {
   const [roIndex, setRoIndex] = useState(0);
   const [theme, setTheme] = useState<"sepia" | "dark" | "midnight">("midnight");
   const [fontSize, setFontSize] = useState(18);
-  const [chrome, setChrome] = useState(true);
+  const [showToc, setShowToc] = useState(false);
 
   // When the EPUB has no TOC, fetch the reading order from the server
   const readingOrder = useQuery({
@@ -131,6 +131,7 @@ function EpubReader({ book, initialChapterId }: Props) {
   function selectChapter(id: string) {
     if (hasNavChapters) setChapterId(id);
     else setRoIndex(Number(id));
+    setShowToc(false);
   }
 
   // Fetch chapter content
@@ -141,7 +142,6 @@ function EpubReader({ book, initialChapterId }: Props) {
       if (hasNavChapters) {
         return (await api.get<BookContent>(`/items/${book.id}/chapters/${chapterId}/content`)).data;
       }
-      // Reading-order fallback: no per-index endpoint yet → show placeholder
       const items = readingOrder.data ?? [];
       const item = items[roIndex];
       return {
@@ -159,43 +159,10 @@ function EpubReader({ book, initialChapterId }: Props) {
     <div
       className="relative min-h-screen transition-colors duration-500"
       style={{ background: palette.bg, color: palette.fg }}
-      onClick={() => setChrome((c) => !c)}
     >
-      {/* ── Header chrome ── */}
-      <AnimatePresence>
-        {chrome && (
-          <motion.header
-            initial={{ opacity: 0, y: -16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            className="absolute inset-x-0 top-0 z-20 px-6 py-4"
-            onClick={(e) => e.stopPropagation()}
-            style={{ background: palette.chrome }}
-          >
-            <div className="mx-auto flex max-w-3xl items-center gap-3">
-              <h2 className="truncate text-base font-semibold">{book.title}</h2>
-              {displayChapters.length > 1 && (
-                <select
-                  value={hasNavChapters ? chapterId : String(roIndex)}
-                  onChange={(e) => selectChapter(e.target.value)}
-                  className="ml-auto rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs"
-                  style={{ color: palette.fg }}
-                >
-                  {displayChapters.map((c) => (
-                    <option key={c.id} value={c.id} className="bg-black">
-                      {c.title}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          </motion.header>
-        )}
-      </AnimatePresence>
-
       {/* ── Article ── */}
       <article
-        className="mx-auto max-w-3xl px-6 py-24 leading-loose tracking-wide"
+        className="mx-auto max-w-3xl px-6 py-16 leading-loose tracking-wide"
         style={{ fontSize: `${fontSize}px`, fontFamily: "'Plus Jakarta Sans', Georgia, serif" }}
       >
         {content.isLoading && (
@@ -219,13 +186,6 @@ function EpubReader({ book, initialChapterId }: Props) {
         {content.data?.unsupported && (
           <div className="flex flex-col items-center gap-4 py-12 text-center">
             <p className="text-sm opacity-70">This file cannot be rendered inline.</p>
-            <a
-              href={content.data.downloadUrl ?? `/api/v1/download/${book.id}`}
-              download
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-mythra-purple to-mythra-blue px-5 py-2.5 text-sm font-medium text-white"
-            >
-              <Download size={14} /> Download to read
-            </a>
           </div>
         )}
 
@@ -241,65 +201,121 @@ function EpubReader({ book, initialChapterId }: Props) {
         )}
       </article>
 
-      {/* ── Footer chrome ── */}
-      <AnimatePresence>
-        {chrome && (
-          <motion.footer
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 16 }}
-            className="absolute inset-x-0 bottom-0 z-20 px-6 py-3"
-            onClick={(e) => e.stopPropagation()}
-            style={{ background: palette.chrome }}
-          >
-            <div className="mx-auto flex max-w-3xl items-center gap-2">
-              <NavButton onClick={goPrev} disabled={!canPrev}>
-                <ChevronLeft size={16} />
-              </NavButton>
-              <span className="text-xs opacity-70">
-                {currentIndex + 1} / {totalChapters || "?"}
-              </span>
-              <NavButton onClick={goNext} disabled={!canNext}>
-                <ChevronRight size={16} />
-              </NavButton>
+      {/* ── Floating left nav button ── */}
+      <button
+        onClick={goPrev}
+        disabled={!canPrev}
+        className={cn(
+          "fixed left-4 top-1/2 z-30 -translate-y-1/2 grid h-12 w-12 place-items-center rounded-full shadow-lg transition-all",
+          "bg-black/60 backdrop-blur border border-white/10 hover:bg-black/80",
+          !canPrev && "opacity-20 cursor-not-allowed"
+        )}
+        title="Previous chapter"
+      >
+        <ChevronLeft size={20} style={{ color: palette.fg }} />
+      </button>
 
-              <div className="ml-auto flex items-center gap-2">
-                <button
-                  onClick={() => setFontSize((s) => Math.max(14, s - 1))}
-                  className="grid h-9 w-9 place-items-center rounded-full text-xs hover:bg-white/10"
-                  title="Smaller text"
-                >
-                  <Type size={12} />−
-                </button>
-                <button
-                  onClick={() => setFontSize((s) => Math.min(28, s + 1))}
-                  className="grid h-9 w-9 place-items-center rounded-full text-xs hover:bg-white/10"
-                  title="Larger text"
-                >
-                  <Type size={14} />+
-                </button>
-                <button
-                  onClick={() => setTheme(rotateTheme(theme))}
-                  className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10"
-                  aria-label="Cycle theme"
-                >
-                  <Sun size={14} />
-                </button>
-                <a
-                  href={`/api/v1/download/${book.id}`}
-                  download
-                  onClick={(e) => e.stopPropagation()}
-                  className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10"
-                  title="Download"
-                >
-                  <Download size={14} />
-                </a>
-                <button className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10">
-                  <Bookmark size={14} />
-                </button>
-              </div>
+      {/* ── Floating right nav button ── */}
+      <button
+        onClick={goNext}
+        disabled={!canNext}
+        className={cn(
+          "fixed right-4 top-1/2 z-30 -translate-y-1/2 grid h-12 w-12 place-items-center rounded-full shadow-lg transition-all",
+          "bg-black/60 backdrop-blur border border-white/10 hover:bg-black/80",
+          !canNext && "opacity-20 cursor-not-allowed"
+        )}
+        title="Next chapter"
+      >
+        <ChevronRight size={20} style={{ color: palette.fg }} />
+      </button>
+
+      {/* ── Floating toolbar (bottom-right) ── */}
+      <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2">
+        {/* Chapter counter */}
+        <span
+          className="rounded-full bg-black/60 backdrop-blur border border-white/10 px-3 py-1 text-xs"
+          style={{ color: palette.fg }}
+        >
+          {currentIndex + 1} / {totalChapters || "?"}
+        </span>
+
+        <div className="flex items-center gap-1.5 rounded-2xl bg-black/60 backdrop-blur border border-white/10 px-2 py-1.5">
+          {/* Font size decrease */}
+          <button
+            onClick={() => setFontSize((s) => Math.max(14, s - 1))}
+            className="grid h-9 w-9 place-items-center rounded-full text-xs hover:bg-white/10"
+            title="Smaller text"
+            style={{ color: palette.fg }}
+          >
+            <Type size={11} />−
+          </button>
+          {/* Font size increase */}
+          <button
+            onClick={() => setFontSize((s) => Math.min(28, s + 1))}
+            className="grid h-9 w-9 place-items-center rounded-full text-xs hover:bg-white/10"
+            title="Larger text"
+            style={{ color: palette.fg }}
+          >
+            <Type size={13} />+
+          </button>
+          {/* Theme toggle */}
+          <button
+            onClick={() => setTheme(rotateTheme(theme))}
+            className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10"
+            aria-label="Cycle theme"
+            style={{ color: palette.fg }}
+          >
+            <Sun size={14} />
+          </button>
+          {/* Bookmark */}
+          <button
+            className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10"
+            style={{ color: palette.fg }}
+          >
+            <Bookmark size={14} />
+          </button>
+          {/* TOC toggle */}
+          {displayChapters.length > 1 && (
+            <button
+              onClick={() => setShowToc((v) => !v)}
+              className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10"
+              aria-label="Table of contents"
+              style={{ color: palette.fg }}
+            >
+              <Menu size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── TOC dropdown ── */}
+      <AnimatePresence>
+        {showToc && displayChapters.length > 1 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.97 }}
+            transition={{ duration: 0.15 }}
+            className="fixed bottom-28 right-6 z-40 max-h-72 w-64 overflow-y-auto rounded-2xl border border-white/10 bg-[#0d0f1c] shadow-2xl"
+          >
+            <div className="p-1">
+              {displayChapters.map((c) => {
+                const isActive = hasNavChapters ? c.id === chapterId : c.id === String(roIndex);
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => selectChapter(c.id)}
+                    className={cn(
+                      "w-full rounded-xl px-3 py-2 text-left text-xs transition hover:bg-white/[0.06]",
+                      isActive ? "text-mythra-purple font-medium" : "text-mythra-text-muted"
+                    )}
+                  >
+                    {c.title}
+                  </button>
+                );
+              })}
             </div>
-          </motion.footer>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -327,29 +343,6 @@ function EpubReader({ book, initialChapterId }: Props) {
 }
 
 // ── Shared ────────────────────────────────────────────────────────────────────
-
-function NavButton({
-  onClick,
-  disabled,
-  children,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "grid h-9 w-9 place-items-center rounded-full hover:bg-white/10",
-        disabled && "cursor-not-allowed opacity-40"
-      )}
-    >
-      {children}
-    </button>
-  );
-}
 
 const themes = {
   sepia: { bg: "linear-gradient(180deg,#f6efe2 0%,#ebe2d2 100%)", fg: "#3a2c1a", chrome: "rgba(255,255,255,0.55)" },

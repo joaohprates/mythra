@@ -1,0 +1,66 @@
+{
+  "id": "io.mythra.mangadex",
+  "name": "MangaDex",
+  "description": "Fetches manga chapters and pages from the official MangaDex API. Supports multi-language with pt-br priority and automatic title matching from AniList metadata.",
+  "version": "1.0.0",
+  "author": "Mythra Team",
+  "homepage": "https://mangadex.org",
+  "minHostVersion": "0.1.0",
+  "capabilities": ["BookSource"],
+  "requiredPermissions": ["Network", "Cache", "ReadConfig"],
+  "optionalPermissions": [],
+  "entryPoint": {
+    "assembly": "Mythra.Addon.MangaDex.dll",
+    "type": "Mythra.Addon.MangaDex.MangaDexAddon"
+  },
+  "requiredSecrets": [],
+  "configSchema": [
+    {
+      "key": "PreferredLanguages",
+      "label": "Preferred languages (comma-separated)",
+      "description": "Language priority list for chapters. Example: pt-br,pt,en. First language with available chapters is used.",
+      "type": "String",
+      "defaultValue": "pt-br,pt,en",
+      "required": false
+    },
+    {
+      "key": "DataSaver",
+      "label": "Data saver mode",
+      "description": "Use compressed images (lower quality, smaller size).",
+      "type": "Boolean",
+      "defaultValue": "false",
+      "required": false
+    },
+    {
+      "key": "SearchCacheTtlMinutes",
+      "label": "Search cache TTL (minutes)",
+      "description": "How long manga search results are cached. Default: 60.",
+      "type": "Number",
+      "defaultValue": "60",
+      "required": false
+    },
+    {
+      "key": "ChapterCacheTtlMinutes",
+      "label": "Chapter list cache TTL (minutes)",
+      "description": "How long chapter lists are cached. Default: 30.",
+      "type": "Number",
+      "defaultValue": "30",
+      "required": false
+    },
+    {
+      "key": "PagesCacheTtlMinutes",
+      "label": "Pages cache TTL (minutes)",
+      "description": "How long page URL lists are cached. Default: 10.",
+      "type": "Number",
+      "defaultValue": "10",
+      "required": false
+    },
+    {
+      "key": "Priority",
+      "label": "Priority (higher = tried first)",
+      "type": "Number",
+      "defaultValue": "100",
+      "required": false
+    }
+  ]
+}

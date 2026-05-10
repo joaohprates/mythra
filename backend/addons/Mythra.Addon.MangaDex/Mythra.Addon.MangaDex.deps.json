@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "Mythra.Addon.MangaDex/0.1.0": {
+        "runtime": {
+          "Mythra.Addon.MangaDex.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Mythra.Addon.MangaDex/0.1.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

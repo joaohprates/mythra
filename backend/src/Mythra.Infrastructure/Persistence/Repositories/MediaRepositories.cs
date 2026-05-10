@@ -48,6 +48,36 @@ public sealed class MediaItemRepository(MythraDbContext db) : EfRepository<Media
             _             => Task.FromResult<MediaItem?>(null),
         };
 
+    public Task<MediaItem?> GetByExternalIdAsync(string externalId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(externalId)) return Task.FromResult<MediaItem?>(null);
+
+        // IMDb: starts with "tt"
+        if (externalId.StartsWith("tt", StringComparison.OrdinalIgnoreCase))
+            return GetByProviderIdAsync("imdb", externalId, ct);
+
+        // Prefixed: "provider:value" — e.g. "movie:550", "tv:1399", "anilist:21", "mangadex:uuid"
+        var sep = externalId.IndexOf(':');
+        if (sep > 0)
+        {
+            var prefix = externalId[..sep].ToLowerInvariant();
+            var value  = externalId[(sep + 1)..];
+            return prefix switch
+            {
+                // TMDb stores the full "movie:id" or "tv:id" string as ProviderTmdbId
+                "movie" or "tv" => Set.FirstOrDefaultAsync(m => m.ProviderTmdbId == externalId, ct),
+                "anilist"       => GetByProviderIdAsync("anilist",   value, ct),
+                "mangadex"      => GetByProviderIdAsync("mangadex",  value, ct),
+                "google"        => GetByProviderIdAsync("google",    value, ct),
+                "gutenberg"     => GetByProviderIdAsync("gutenberg", value, ct),
+                "librivox"      => GetByProviderIdAsync("librivox",  value, ct),
+                _               => Task.FromResult<MediaItem?>(null),
+            };
+        }
+
+        return Task.FromResult<MediaItem?>(null);
+    }
+
     private static readonly string[] AdultGenreNames =
         ["Hentai", "Ecchi", "Adult", "Adult Content", "Pornography", "Eroge"];
 
@@ -97,6 +127,7 @@ public sealed class VideoRepository(MythraDbContext db) : EfRepository<VideoItem
            .Include(v => v.AudioTracks)
            .Include(v => v.ChapterMarkers)
            .Include(v => v.Genres)
+           .Include(v => v.People).ThenInclude(r => r.Person)
            .FirstOrDefaultAsync(v => v.Id == id, ct);
 
     public async Task<IReadOnlyList<VideoItem>> ListEpisodesAsync(Guid seriesId, CancellationToken ct = default) =>
@@ -137,6 +168,34 @@ public sealed class GenreRepository(MythraDbContext db) : EfRepository<Genre>(db
         var q = Set.AsQueryable();
         if (kind.HasValue) q = q.Where(g => g.Kind == kind || g.Kind == null);
         return await q.OrderBy(g => g.Name).ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<Genre>> GetOrCreateManyAsync(IEnumerable<string> names, CancellationToken ct = default)
+    {
+        var nameList = names
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (nameList.Count == 0) return [];
+
+        var slugs = nameList.Select(n => n.ToLowerInvariant().Replace(' ', '-')).ToHashSet();
+        var existing = await Set.Where(g => slugs.Contains(g.Slug)).ToListAsync(ct);
+        var existingSlugs = existing.Select(g => g.Slug).ToHashSet();
+
+        var toCreate = nameList
+            .Where(n => !existingSlugs.Contains(n.ToLowerInvariant().Replace(' ', '-')))
+            .Select(n => new Genre(n))
+            .ToList();
+
+        if (toCreate.Count > 0)
+        {
+            Set.AddRange(toCreate);
+            existing.AddRange(toCreate);
+        }
+
+        return existing;
     }
 }
 
