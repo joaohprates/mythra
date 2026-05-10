@@ -14,6 +14,7 @@ public interface IAddonHost
 
     IReadOnlyList<IMetadataAddon> MetadataAddons { get; }
     IReadOnlyList<IStreamSourceAddon> StreamSourceAddons { get; }
+    IReadOnlyList<IBookSourceAddon> BookSourceAddons { get; }
     IReadOnlyList<ISubtitleAddon> SubtitleAddons { get; }
 
     /// <summary>Returns any loaded addon by its manifest ID, or null if not loaded.</summary>

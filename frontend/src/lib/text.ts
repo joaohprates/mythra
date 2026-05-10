@@ -32,6 +32,7 @@ export function cleanDescription(raw: string | null | undefined): string {
     .replace(/&nbsp;/g, " ")
     // Collapse 3+ consecutive newlines into 2 (keeps paragraph breaks but kills runs)
     .replace(/\n{3,}/g, "\n\n")
+    .replace(/<[^>]+>/g, "")
     .trim();
 }
 

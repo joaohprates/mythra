@@ -24,6 +24,7 @@ public sealed class DiscoverController(IDiscoverService discover) : ControllerBa
         [FromQuery] string category = "popular",            // popular | trending | top | year | rating
         [FromQuery] string? kind = null,                    // optional MediaKind override
         [FromQuery] string? provider = null,
+        [FromQuery] string? genre = null,
         [FromQuery] int page = 1,
         [FromQuery] int? skip = null,
         [FromQuery] int take = 20,
@@ -43,7 +44,8 @@ public sealed class DiscoverController(IDiscoverService discover) : ControllerBa
             Category: string.IsNullOrWhiteSpace(category) ? "popular" : category.Trim().ToLowerInvariant(),
             Skip:     safeSkip,
             Take:     safeTake,
-            Provider: provider);
+            Provider: provider,
+            Genre:    string.IsNullOrWhiteSpace(genre) ? null : genre.Trim());
 
         return (await discover.SearchAsync(query, ct)).ToActionResult();
     }

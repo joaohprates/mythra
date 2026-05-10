@@ -2,6 +2,13 @@ using Mythra.Domain.Media;
 
 namespace Mythra.Application.Abstractions.Metadata;
 
+public sealed record MetadataCastMember(
+    string Name,
+    PersonRole Role,
+    string? Character,
+    int Order,
+    string? ProviderTmdbId = null);
+
 public sealed record MetadataSearchResult(
     string ProviderId,
     string Title,
@@ -13,7 +20,8 @@ public sealed record MetadataSearchResult(
     double? Rating,
     IReadOnlyList<string> Genres,
     IReadOnlyDictionary<string, string> ProviderIds,
-    bool IsAdult = false);
+    bool IsAdult = false,
+    IReadOnlyList<MetadataCastMember>? Cast = null);
 
 public interface IMetadataProvider
 {

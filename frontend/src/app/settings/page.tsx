@@ -970,8 +970,8 @@ function AdultContentSection() {
         </p>
       </div>
 
-      <div className="flex items-start gap-4 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4">
-        <div className="flex-1">
+      <div className="flex items-center gap-4 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4">
+        <div className="flex-1 min-w-0">
           <p className="text-sm font-medium">{t("settings.adult.show")}</p>
           <p className="mt-0.5 text-xs text-mythra-text-muted">
             {t("settings.adult.showDesc")}
@@ -980,16 +980,17 @@ function AdultContentSection() {
         <button
           onClick={() => setShowAdultContent(!showAdultContent)}
           disabled={!mounted}
-          className={
-            "relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-60 " +
-            (mounted && showAdultContent ? "bg-red-500" : "bg-white/10")
-          }
           aria-pressed={mounted && showAdultContent}
+          className={
+            "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent " +
+            "transition-colors duration-200 focus-visible:outline-none disabled:opacity-60 " +
+            (mounted && showAdultContent ? "bg-red-500" : "bg-white/20")
+          }
         >
           <span
             className={
-              "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 " +
-              (mounted && showAdultContent ? "translate-x-5" : "translate-x-0.5")
+              "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 " +
+              (mounted && showAdultContent ? "translate-x-5" : "translate-x-0")
             }
           />
         </button>

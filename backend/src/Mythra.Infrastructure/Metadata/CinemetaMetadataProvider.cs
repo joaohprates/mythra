@@ -34,11 +34,20 @@ public sealed class CinemetaMetadataProvider(
     {
         if (!Supports(kind) || string.IsNullOrWhiteSpace(query)) return [];
 
-        // Cinemeta has no "multi" endpoint — query both movie and series and merge results.
-        var movies  = await FetchAsync($"catalog/movie/top/search={Uri.EscapeDataString(query)}.json", "movie", ct);
-        var series  = await FetchAsync($"catalog/series/top/search={Uri.EscapeDataString(query)}.json", "series", ct);
+        // Run title search and genre search in parallel; merge and deduplicate.
+        var q = Uri.EscapeDataString(query);
+        var movieTitleTask  = FetchAsync($"catalog/movie/top/search={q}.json", "movie", ct);
+        var seriesTitleTask = FetchAsync($"catalog/series/top/search={q}.json", "series", ct);
+        var movieGenreTask  = FetchAsync($"catalog/movie/top/genre={q}.json", "movie", ct);
+        var seriesGenreTask = FetchAsync($"catalog/series/top/genre={q}.json", "series", ct);
+        await Task.WhenAll(movieTitleTask, seriesTitleTask, movieGenreTask, seriesGenreTask);
 
-        var combined = movies.Concat(series).ToList();
+        var combined = movieTitleTask.Result
+            .Concat(seriesTitleTask.Result)
+            .Concat(movieGenreTask.Result)
+            .Concat(seriesGenreTask.Result)
+            .DistinctBy(r => r.ProviderId)
+            .ToList();
 
         if (year.HasValue)
             combined = combined.Where(r => r.ReleaseDate?.Year == year.Value).ToList();
@@ -76,7 +85,7 @@ public sealed class CinemetaMetadataProvider(
     }
 
     public async Task<IReadOnlyList<MetadataSearchResult>> GetCatalogAsync(
-        MediaKind kind, string catalogType, string category, int skip, int take, CancellationToken ct = default)
+        MediaKind kind, string catalogType, string category, int skip, int take, string? genre = null, CancellationToken ct = default)
     {
         if (!SupportsCatalog(kind, catalogType)) return [];
 
@@ -85,9 +94,20 @@ public sealed class CinemetaMetadataProvider(
 
         // Stremio paginates in steps of 100. We fetch one page and slice locally.
         var pageStart = (skip / 100) * 100;
-        var url = pageStart == 0
-            ? $"catalog/{catalogType}/{catalogId}.json"
-            : $"catalog/{catalogType}/{catalogId}/skip={pageStart}.json";
+        string url;
+        if (!string.IsNullOrWhiteSpace(genre))
+        {
+            var eg = Uri.EscapeDataString(genre);
+            url = pageStart == 0
+                ? $"catalog/{catalogType}/{catalogId}/genre={eg}.json"
+                : $"catalog/{catalogType}/{catalogId}/genre={eg}/skip={pageStart}.json";
+        }
+        else
+        {
+            url = pageStart == 0
+                ? $"catalog/{catalogType}/{catalogId}.json"
+                : $"catalog/{catalogType}/{catalogId}/skip={pageStart}.json";
+        }
 
         var page = await FetchAsync(url, catalogType, ct);
         var localOffset = skip - pageStart;

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Play, Heart, MoreVertical, ListPlus, Trash2, Library, Lock } from "lucide-react";
 import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cardHover } from "@/lib/motion";
 import type { MediaItem, SearchHit } from "@/lib/types";
@@ -14,6 +15,7 @@ import { useAuthStore } from "@/store/auth";
 import { useProfilePrefs } from "@/store/profile";
 import { useTranslation } from "@/store/locale";
 import { SmartImage } from "@/components/ui/SmartImage";
+import { AddToPlaylistModal } from "@/components/media/AddToPlaylistModal";
 
 type Item = MediaItem | SearchHit;
 
@@ -35,6 +37,7 @@ export function MediaCard({ item, size = "md", showOverview = false, showActions
   const subtitle = "subtitle" in item ? item.subtitle : item.year ? String(item.year) : null;
   const overview = "overview" in item ? item.overview : null;
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [showPlaylist, setShowPlaylist] = useState(false);
   const [adultRevealed, setAdultRevealed] = useState(false);
   const { showAdultContent } = useProfilePrefs();
   const t = useTranslation();
@@ -135,7 +138,7 @@ export function MediaCard({ item, size = "md", showOverview = false, showActions
 
       {/* Action overlay */}
       {showActions && "libraryId" in item && (
-        <CardActions item={item as MediaItem} />
+        <CardActions item={item as MediaItem} onAddToPlaylist={() => setShowPlaylist(true)} />
       )}
       {ctxMenu && "libraryId" in item && (
         <ContextMenu
@@ -143,25 +146,36 @@ export function MediaCard({ item, size = "md", showOverview = false, showActions
           x={ctxMenu.x}
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
+          onAddToPlaylist={() => { setCtxMenu(null); setShowPlaylist(true); }}
         />
+      )}
+      {"libraryId" in item && (
+        <AddToPlaylistModal itemId={item.id} open={showPlaylist} onClose={() => setShowPlaylist(false)} />
       )}
     </motion.div>
   );
 }
 
 function ContextMenu({
-  item, x, y, onClose,
+  item, x, y, onClose, onAddToPlaylist,
 }: {
   item: MediaItem;
   x: number;
   y: number;
   onClose: () => void;
+  onAddToPlaylist: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const activeProfile = useAuthStore((s) => s.activeProfile);
   const t = useTranslation();
   const qc = useQueryClient();
   const profileId = activeProfile?.id ?? null;
+
+  // Clamp position so menu stays inside viewport (menu is ~176px wide, ~160px tall)
+  const menuW = 176;
+  const menuH = 160;
+  const left = typeof window !== "undefined" ? Math.min(x, window.innerWidth - menuW - 8) : x;
+  const top  = typeof window !== "undefined" ? Math.min(y, window.innerHeight - menuH - 8) : y;
 
   const favoriteQuery = useQuery({
     queryKey: ["favorite-status", profileId, item.id],
@@ -203,16 +217,17 @@ function ContextMenu({
     };
   }, [onClose]);
 
-  if (!profileId) return null;
+  if (!profileId || typeof document === "undefined") return null;
 
-  return (
+  // Render in portal at document.body to escape CSS transforms on ancestor elements
+  return createPortal(
     <motion.div
       ref={ref}
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.12 }}
-      className="fixed z-50 w-44 overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f1c] shadow-2xl"
-      style={{ left: x, top: y }}
+      className="fixed z-[9999] w-44 overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f1c] shadow-2xl"
+      style={{ left, top }}
       onClick={(e) => e.stopPropagation()}
     >
       <MenuItem
@@ -223,12 +238,12 @@ function ContextMenu({
       <MenuItem
         icon={<Library size={13} />}
         label={t("action.viewInLibrary")}
-        onClick={() => { window.location.href = `/item/${item.id}`; onClose(); }}
+        onClick={() => { window.location.href = `/item/${item.externalId ?? item.id}`; onClose(); }}
       />
       <MenuItem
         icon={<ListPlus size={13} />}
         label={t("action.addToPlaylist")}
-        onClick={() => { window.location.href = `/playlists`; onClose(); }}
+        onClick={onAddToPlaylist}
       />
       <div className="my-1 h-px bg-white/[0.06]" />
       <MenuItem
@@ -244,13 +259,14 @@ function ContextMenu({
           finally { onClose(); }
         }}
       />
-    </motion.div>
+    </motion.div>,
+    document.body
   );
 }
 
 // ── Card action menu ──────────────────────────────────────────────────────────
 
-function CardActions({ item }: { item: MediaItem }) {
+function CardActions({ item, onAddToPlaylist }: { item: MediaItem; onAddToPlaylist: () => void }) {
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -342,12 +358,12 @@ function CardActions({ item }: { item: MediaItem }) {
             <MenuItem
               icon={<Library size={13} />}
               label={t("action.viewInLibrary")}
-              onClick={() => { window.location.href = `/item/${item.id}`; setOpen(false); }}
+              onClick={() => { window.location.href = `/item/${item.externalId ?? item.id}`; setOpen(false); }}
             />
             <MenuItem
               icon={<ListPlus size={13} />}
               label={t("action.addToPlaylist")}
-              onClick={() => { window.location.href = `/playlists`; setOpen(false); }}
+              onClick={() => { setOpen(false); onAddToPlaylist(); }}
             />
             <div className="my-1 h-px bg-white/[0.06]" />
             <MenuItem
@@ -421,5 +437,6 @@ function AdultBadge() {
 }
 
 function hrefFor(item: Item): string {
+  if ("externalId" in item && item.externalId) return `/item/${item.externalId}`;
   return `/item/${item.id}`;
 }

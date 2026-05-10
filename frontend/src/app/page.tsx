@@ -57,14 +57,6 @@ export default function HomePage() {
   const tokenReady = isHydrated && !!accessToken;
   const profileReady = isHydrated && !!profile;
 
-  const recentVideo = useQuery({
-    queryKey: ["recent", "Video"],
-    queryFn: async () =>
-      (await api.get<{ items: MediaItem[] }>("/items", { params: { take: 18, orderBy: "-added", includeAdult: true } })).data.items,
-    enabled: tokenReady,
-    ...HOME_QUERY_OPTS,
-  });
-
   const trendingMovies = useQuery({
     queryKey: ["videos", "movies"],
     queryFn: async () => (await api.get<{ items: MediaItem[] }>("/items", { params: { kind: "Video", take: 18, includeAdult: true } })).data.items,
@@ -128,9 +120,8 @@ export default function HomePage() {
     ...HOME_QUERY_OPTS,
   });
 
-  // Hero fallback: prefer recentVideo; if empty, walk other rows for a non-empty source.
+  // Hero fallback: walk rows for first non-empty source.
   const heroSource =
-    (recentVideo.data && recentVideo.data.length > 0 && recentVideo.data) ||
     (trendingMovies.data && trendingMovies.data.length > 0 && trendingMovies.data) ||
     (animeRow.data && animeRow.data.length > 0 && animeRow.data) ||
     (mangaRow.data && mangaRow.data.length > 0 && mangaRow.data) ||
@@ -170,14 +161,13 @@ export default function HomePage() {
               size="md"
             />
           )}
-          <ContentRow title={t("home.row.recent")} subtitle={t("home.row.recent.sub")} items={recentVideo.data ?? []} size="md" loading={recentVideo.isLoading} />
           <ContentRow title={t("home.row.movies")} items={trendingMovies.data ?? []} size="md" loading={trendingMovies.isLoading} />
           {(animeRow.data?.length ?? 0) > 0 && <ContentRow title={t("home.row.anime")} items={animeRow.data ?? []} size="md" />}
           {(mangaRow.data?.length ?? 0) > 0 && <ContentRow title={t("home.row.manga")} items={mangaRow.data ?? []} size="sm" />}
           {(bookRow.data?.length ?? 0) > 0 && <ContentRow title={t("home.row.books")} items={bookRow.data ?? []} size="sm" />}
         </div>
 
-        {!recentVideo.isLoading && (recentVideo.data?.length ?? 0) === 0 && (
+        {!trendingMovies.isLoading && (trendingMovies.data?.length ?? 0) === 0 && (
           <EmptyState onDemoLoaded={() => qc.invalidateQueries()} />
         )}
       </PageScaffold>

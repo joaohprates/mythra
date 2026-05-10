@@ -11,16 +11,124 @@ namespace Mythra.Infrastructure.Metadata;
 /// Metadata provider backed by the Open Library API (openlibrary.org).
 /// Free, no API key required. ProviderId is the Open Library work key (e.g. "OL45883W").
 /// Stored in ProviderGoogleBooksId column for backwards compatibility (no new migration needed).
+/// Also implements ICatalogProvider for book catalog browsing (popular / trending / top-rated).
 /// </summary>
 public sealed class OpenLibraryMetadataProvider(
     HttpClient http,
     IMemoryCache cache,
-    ILogger<OpenLibraryMetadataProvider> log) : IMetadataProvider
+    ILogger<OpenLibraryMetadataProvider> log) : IMetadataProvider, ICatalogProvider
 {
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(10);
 
     public string Name => "openlibrary";
     public bool Supports(MediaKind kind) => kind == MediaKind.Book;
+
+    // ── ICatalogProvider ─────────────────────────────────────────────────────
+
+    public bool SupportsCatalog(MediaKind kind, string catalogType) =>
+        kind == MediaKind.Book && catalogType == "book";
+
+    public async Task<IReadOnlyList<MetadataSearchResult>> GetCatalogAsync(
+        MediaKind kind, string catalogType, string category, int skip, int take, string? genre = null, CancellationToken ct = default)
+    {
+        if (!SupportsCatalog(kind, catalogType)) return [];
+
+        if (!string.IsNullOrWhiteSpace(genre))
+            return await SearchBySubjectAsync(genre, skip, take, ct);
+
+        try
+        {
+            return category?.ToLowerInvariant() switch
+            {
+                "trending" => await FetchTrendingAsync("weekly", skip, take, ct),
+                "rating" or "top" => await FetchTopRatedAsync(skip, take, ct),
+                _ => await FetchTrendingAsync("daily", skip, take, ct),
+            };
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "[OpenLibrary] Catalog fetch failed (category={Category})", category);
+            return [];
+        }
+    }
+
+    private async Task<IReadOnlyList<MetadataSearchResult>> FetchTrendingAsync(
+        string period, int skip, int take, CancellationToken ct)
+    {
+        var url = $"trending/{period}.json?limit={Math.Max(take, 20)}&offset={skip}";
+        var cacheKey = $"openlibrary:trending:{url}";
+        if (cache.TryGetValue(cacheKey, out List<MetadataSearchResult>? cached) && cached is not null)
+            return cached.Take(take).ToList();
+
+        var resp = await http.GetAsync(url, ct);
+        if (!resp.IsSuccessStatusCode) return [];
+
+        var jsonStr = await resp.Content.ReadAsStringAsync(ct);
+        var json = JsonSerializer.Deserialize<JsonElement>(jsonStr);
+
+        var results = new List<MetadataSearchResult>();
+        if (json.TryGetProperty("works", out var works))
+            foreach (var w in works.EnumerateArray())
+            {
+                var r = TryMapDoc(w);
+                if (r is not null) results.Add(r);
+            }
+
+        cache.Set(cacheKey, results, CacheTtl);
+        return results.Take(take).ToList();
+    }
+
+    private async Task<IReadOnlyList<MetadataSearchResult>> FetchTopRatedAsync(
+        int skip, int take, CancellationToken ct)
+    {
+        var url = $"search.json?q=fiction&sort=rating&limit={Math.Max(take, 20)}&offset={skip}&fields=key,title,author_name,first_publish_year,cover_i,subject";
+        var cacheKey = $"openlibrary:toprated:{skip}:{take}";
+        if (cache.TryGetValue(cacheKey, out List<MetadataSearchResult>? cached) && cached is not null)
+            return cached.Take(take).ToList();
+
+        var resp = await http.GetAsync(url, ct);
+        if (!resp.IsSuccessStatusCode) return [];
+
+        var jsonStr = await resp.Content.ReadAsStringAsync(ct);
+        var json = JsonSerializer.Deserialize<JsonElement>(jsonStr);
+
+        var results = new List<MetadataSearchResult>();
+        if (json.TryGetProperty("docs", out var docs))
+            foreach (var d in docs.EnumerateArray())
+            {
+                var r = TryMapDoc(d);
+                if (r is not null) results.Add(r);
+            }
+
+        cache.Set(cacheKey, results, CacheTtl);
+        return results.Take(take).ToList();
+    }
+
+    private async Task<IReadOnlyList<MetadataSearchResult>> SearchBySubjectAsync(
+        string subject, int skip, int take, CancellationToken ct)
+    {
+        var url = $"search.json?q=subject:{Uri.EscapeDataString(subject)}&limit={Math.Max(take, 20)}&offset={skip}&fields=key,title,author_name,first_publish_year,cover_i,subject";
+        var cacheKey = $"openlibrary:subject:{subject}:{skip}:{take}";
+        if (cache.TryGetValue(cacheKey, out List<MetadataSearchResult>? cached) && cached is not null)
+            return cached.Take(take).ToList();
+
+        var resp = await http.GetAsync(url, ct);
+        if (!resp.IsSuccessStatusCode) return [];
+
+        var jsonStr = await resp.Content.ReadAsStringAsync(ct);
+        var json = JsonSerializer.Deserialize<JsonElement>(jsonStr);
+
+        var results = new List<MetadataSearchResult>();
+        if (json.TryGetProperty("docs", out var docs))
+            foreach (var d in docs.EnumerateArray())
+            {
+                var r = TryMapDoc(d);
+                if (r is not null) results.Add(r);
+            }
+
+        cache.Set(cacheKey, results, CacheTtl);
+        return results.Take(take).ToList();
+    }
 
     public async Task<IReadOnlyList<MetadataSearchResult>> SearchAsync(
         string query, MediaKind kind, int? year, CancellationToken ct = default)

@@ -50,6 +50,16 @@ export interface MediaItem {
   tags: string[];
   createdAt: string;
   isAdult?: boolean;
+  /** External provider ID (e.g. "tt1234567", "movie:550"). Used as the URL segment for /item/[id]. */
+  externalId?: string | null;
+}
+
+export interface CastMember {
+  name: string;
+  role: string;
+  character?: string | null;
+  order: number;
+  photoPath?: string | null;
 }
 
 export interface VideoItemDetail extends MediaItem {
@@ -73,6 +83,7 @@ export interface VideoItemDetail extends MediaItem {
   imdbId?: string | null;
   /** Parent series ID for episodes. */
   parentId?: string | null;
+  cast?: CastMember[] | null;
 }
 
 export interface Subtitle {

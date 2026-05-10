@@ -17,12 +17,16 @@ public sealed class SearchController(ISearchService search) : ControllerBase
 
     [HttpGet]
     public async Task<IActionResult> Get(
-        [FromQuery] string q,
+        [FromQuery] string? q = null,
+        [FromQuery] string? kind = null,
         [FromQuery] int skip = 0,
         [FromQuery] int take = 30,
         CancellationToken ct = default)
     {
-        var req = new UnifiedSearchRequest(q, null, null, null, null, skip, take);
+        List<Domain.Media.MediaKind>? kinds = null;
+        if (kind is not null && Enum.TryParse<Domain.Media.MediaKind>(kind, true, out var parsed))
+            kinds = [parsed];
+        var req = new UnifiedSearchRequest(q ?? "", kinds, null, null, null, skip, take);
         return (await search.SearchAsync(req, ct)).ToActionResult();
     }
 }

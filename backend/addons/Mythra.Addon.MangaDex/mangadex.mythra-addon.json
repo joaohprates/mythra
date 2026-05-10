@@ -1,0 +1,10 @@
+{
+  "name": "MangaDex",
+  "description": "Fetches manga chapters and pages from the official MangaDex API. Supports multi-language with pt-br priority and automatic title matching. No API key required.",
+  "iconUrl": null,
+  "kind": 1,
+  "targetMediaKind": "Manga",
+  "providerType": "io.mythra.mangadex",
+  "providerConfigJson": "{\"PreferredLanguages\":\"pt-br,pt,en\",\"DataSaver\":\"false\",\"SearchCacheTtlMinutes\":\"60\",\"ChapterCacheTtlMinutes\":\"30\",\"PagesCacheTtlMinutes\":\"10\",\"Priority\":\"100\"}",
+  "sourceChecksum": ""
+}

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Mythra.Api.Common;
 using Mythra.Application.Abstractions.Persistence;
 using Mythra.Application.Services.Media;
+using Mythra.Domain.Common;
 using Mythra.Domain.Media;
 
 namespace Mythra.Api.Controllers;
@@ -40,26 +41,50 @@ public sealed class MediaController(IMediaService media) : ControllerBase
         return result.ToActionResult();
     }
 
-    [HttpGet("{id:guid}")]
-    public async Task<IActionResult> Get(Guid id, CancellationToken ct) => (await media.GetDetailAsync(id, ct)).ToActionResult();
+    [HttpGet("{id}")]
+    public async Task<IActionResult> Get(string id, CancellationToken ct)
+    {
+        var guid = await ResolveIdAsync(id, ct);
+        if (!guid.IsSuccess) return guid.ToActionResult();
+        return (await media.GetDetailAsync(guid.Value, ct)).ToActionResult();
+    }
 
-    [HttpGet("{id:guid}/summary")]
-    public async Task<IActionResult> Summary(Guid id, CancellationToken ct) => (await media.GetSummaryAsync(id, ct)).ToActionResult();
+    [HttpGet("{id}/summary")]
+    public async Task<IActionResult> Summary(string id, CancellationToken ct)
+    {
+        var guid = await ResolveIdAsync(id, ct);
+        if (!guid.IsSuccess) return guid.ToActionResult();
+        return (await media.GetSummaryAsync(guid.Value, ct)).ToActionResult();
+    }
 
     [HttpGet("recently-added")]
     public async Task<IActionResult> RecentlyAdded([FromQuery] Guid? libraryId, [FromQuery] int take = 20, CancellationToken ct = default) =>
         (await media.RecentlyAddedAsync(libraryId, take, ct)).ToActionResult();
 
-    [HttpGet("{id:guid}/episodes")]
-    public async Task<IActionResult> Episodes(Guid id, CancellationToken ct) =>
-        (await media.ListEpisodesAsync(id, ct)).ToActionResult();
+    [HttpGet("{id}/episodes")]
+    public async Task<IActionResult> Episodes(string id, CancellationToken ct)
+    {
+        var guid = await ResolveIdAsync(id, ct);
+        if (!guid.IsSuccess) return guid.ToActionResult();
+        return (await media.ListEpisodesAsync(guid.Value, ct)).ToActionResult();
+    }
 
     [HttpGet("genres")]
     public async Task<IActionResult> Genres([FromQuery] MediaKind? kind, CancellationToken ct) =>
         (await media.ListGenresAsync(kind, ct)).ToActionResult();
 
-    [HttpDelete("{id:guid}")]
+    [HttpDelete("{id}")]
     [Authorize(Roles = "Admin,Manager")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct) =>
-        (await media.DeleteAsync(id, ct)).ToActionResult();
+    public async Task<IActionResult> Delete(string id, CancellationToken ct)
+    {
+        var guid = await ResolveIdAsync(id, ct);
+        if (!guid.IsSuccess) return guid.ToActionResult();
+        return (await media.DeleteAsync(guid.Value, ct)).ToActionResult();
+    }
+
+    private async Task<Result<Guid>> ResolveIdAsync(string id, CancellationToken ct)
+    {
+        if (Guid.TryParse(id, out var guid)) return guid;
+        return await media.FindIdByExternalAsync(id, ct);
+    }
 }

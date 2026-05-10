@@ -25,7 +25,7 @@ public sealed class AniListCatalogProvider(
         && (kind == MediaKind.Video || kind == MediaKind.Manga);
 
     public async Task<IReadOnlyList<MetadataSearchResult>> GetCatalogAsync(
-        MediaKind kind, string catalogType, string category, int skip, int take, CancellationToken ct = default)
+        MediaKind kind, string catalogType, string category, int skip, int take, string? genre = null, CancellationToken ct = default)
     {
         if (!SupportsCatalog(kind, catalogType)) return [];
 
@@ -37,9 +37,9 @@ public sealed class AniListCatalogProvider(
         var graphql = new
         {
             query = """
-                query ($page: Int, $perPage: Int, $type: MediaType, $sort: [MediaSort]) {
+                query ($page: Int, $perPage: Int, $type: MediaType, $sort: [MediaSort], $genre: String) {
                   Page(page: $page, perPage: $perPage) {
-                    media(type: $type, sort: $sort) {
+                    media(type: $type, sort: $sort, genre: $genre) {
                       id idMal
                       title { romaji english native }
                       description(asHtml: false)
@@ -53,7 +53,7 @@ public sealed class AniListCatalogProvider(
                   }
                 }
                 """,
-            variables = new { page, perPage, type, sort = new[] { sort } }
+            variables = new { page, perPage, type, sort = new[] { sort }, genre = string.IsNullOrWhiteSpace(genre) ? (string?)null : genre }
         };
 
         try

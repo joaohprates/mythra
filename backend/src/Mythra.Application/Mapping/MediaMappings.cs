@@ -26,7 +26,19 @@ public static class MediaMappings
         item.Genres.Select(g => g.Name).ToList(),
         item.Tags.Select(t => t.Name).ToList(),
         item.CreatedAt,
-        IsAdult: (item.Genres ?? []).Any(g => AdultGenres.Contains(g.Name)));
+        IsAdult: (item.Genres ?? []).Any(g => AdultGenres.Contains(g.Name)),
+        ExternalId: DeriveExternalId(item));
+
+    private static string? DeriveExternalId(MediaItem item) => item switch
+    {
+        VideoItem v when !string.IsNullOrEmpty(v.ProviderTmdbId)   => v.ProviderTmdbId,
+        VideoItem                                                    => null,
+        MangaItem m when !string.IsNullOrEmpty(m.ProviderAnilistId)  => $"anilist:{m.ProviderAnilistId}",
+        MangaItem m when !string.IsNullOrEmpty(m.ProviderMangaDexId) => $"mangadex:{m.ProviderMangaDexId}",
+        BookItem b  when !string.IsNullOrEmpty(b.ProviderGoogleBooksId) => $"google:{b.ProviderGoogleBooksId}",
+        BookItem b  when !string.IsNullOrEmpty(b.ProviderGutenbergId)   => $"gutenberg:{b.ProviderGutenbergId}",
+        _ => null,
+    };
 
     public static VideoItemDto ToDetail(this VideoItem v) => new(
         v.Id,
@@ -56,7 +68,12 @@ public static class MediaMappings
         HasFile: !string.IsNullOrWhiteSpace(v.FilePath),
         ImdbId: v.ProviderImdbId,
         ParentId: v.ParentId,
-        Kind: "Video");
+        Kind: "Video",
+        Cast: v.People is { Count: > 0 }
+            ? v.People.OrderBy(p => p.Order)
+                .Select(p => new CastMemberDto(p.Person?.Name ?? "", p.Role.ToString(), p.Character, p.Order, p.Person?.PhotoPath))
+                .ToList()
+            : null);
 
     private static readonly HashSet<string> AdultGenres = new(StringComparer.OrdinalIgnoreCase)
         { "Hentai", "Ecchi", "Adult", "Adult Content", "Pornography", "Eroge" };

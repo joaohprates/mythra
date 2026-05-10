@@ -19,5 +19,6 @@ public interface ICatalogProvider
         string category,
         int skip,
         int take,
+        string? genre = null,
         CancellationToken ct = default);
 }

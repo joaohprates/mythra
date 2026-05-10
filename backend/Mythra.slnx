@@ -13,5 +13,6 @@
   </Folder>
   <Folder Name="/addons/">
     <Project Path="addons/Mythra.Addon.MoviesEmbed/Mythra.Addon.MoviesEmbed.csproj" />
+    <Project Path="addons/Mythra.Addon.MangaDex/Mythra.Addon.MangaDex.csproj" />
   </Folder>
 </Solution>

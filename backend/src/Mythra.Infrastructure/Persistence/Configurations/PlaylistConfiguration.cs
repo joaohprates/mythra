@@ -19,6 +19,9 @@ public sealed class PlaylistConfiguration : IEntityTypeConfiguration<Playlist>
          .WithOne()
          .HasForeignKey(i => i.PlaylistId)
          .OnDelete(DeleteBehavior.Cascade);
+        b.Navigation(p => p.Items)
+         .HasField("_items")
+         .UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }
 

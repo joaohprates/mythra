@@ -23,7 +23,8 @@ public sealed record MediaItemDto(
     IReadOnlyList<string> Genres,
     IReadOnlyList<string> Tags,
     DateTimeOffset CreatedAt,
-    bool IsAdult = false);
+    bool IsAdult = false,
+    string? ExternalId = null);
 
 public sealed record VideoItemDto(
     Guid Id,
@@ -54,7 +55,8 @@ public sealed record VideoItemDto(
     bool HasFile = true,
     string? ImdbId = null,
     Guid? ParentId = null,
-    string Kind = "Video");
+    string Kind = "Video",
+    IReadOnlyList<CastMemberDto>? Cast = null);
 
 public sealed record SubtitleDto(Guid Id, string LanguageCode, string? DisplayName, string Format, SubtitleKind Kind, bool IsDefault, bool IsForced);
 
@@ -106,5 +108,7 @@ public sealed record BookItemDto(
     bool IsExternal = false);
 
 public sealed record BookChapterDto(Guid Id, int Order, string Title, string? Anchor, int? StartPage, int? EndPage);
+
+public sealed record CastMemberDto(string Name, string Role, string? Character, int Order, string? PhotoPath);
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Skip, int Take);

@@ -14,4 +14,6 @@ public interface IMediaService
     Task<Result<IReadOnlyList<string>>> ListGenresAsync(MediaKind? kind, CancellationToken ct = default);
     Task<Result<IReadOnlyList<VideoItemDto>>> ListEpisodesAsync(Guid seriesId, CancellationToken ct = default);
     Task<Result> DeleteAsync(Guid id, CancellationToken ct = default);
+    /// <summary>Resolves an external provider ID string to the internal Guid.</summary>
+    Task<Result<Guid>> FindIdByExternalAsync(string externalId, CancellationToken ct = default);
 }

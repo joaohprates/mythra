@@ -26,6 +26,8 @@ public interface IMediaItemRepository : IRepository<MediaItem>
     Task<IReadOnlyList<MediaItem>> ByIdsAsync(IEnumerable<Guid> ids, CancellationToken ct = default);
     /// <summary>Finds the first item that has a matching provider ID (e.g. "tmdb" → "155").</summary>
     Task<MediaItem?> GetByProviderIdAsync(string providerKind, string providerId, CancellationToken ct = default);
+    /// <summary>Resolves an external ID string (e.g. "tt1234567", "movie:123", "anilist:456") to a MediaItem.</summary>
+    Task<MediaItem?> GetByExternalIdAsync(string externalId, CancellationToken ct = default);
 }
 
 public interface IVideoRepository : IRepository<VideoItem>
@@ -52,6 +54,11 @@ public interface IGenreRepository : IRepository<Genre>
 {
     Task<Genre?> GetBySlugAsync(string slug, CancellationToken ct = default);
     Task<IReadOnlyList<Genre>> ListAsync(MediaKind? kind, CancellationToken ct = default);
+    /// <summary>
+    /// Returns existing genres for the given names, creating only those that don't exist yet.
+    /// Prevents unique-constraint violations when the same genre is shared across multiple items.
+    /// </summary>
+    Task<IReadOnlyList<Genre>> GetOrCreateManyAsync(IEnumerable<string> names, CancellationToken ct = default);
 }
 
 public interface ITagRepository : IRepository<Tag>

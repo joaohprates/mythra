@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -12,7 +11,7 @@ public sealed class TmdbMetadataProvider(
     HttpClient http,
     IMemoryCache cache,
     IOptions<MetadataOptions> opts,
-    ILogger<TmdbMetadataProvider> log) : IMetadataProvider
+    ILogger<TmdbMetadataProvider> log) : IMetadataProvider, ICatalogProvider
 {
     private readonly MetadataOptions _opts = opts.Value;
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(10);
@@ -20,6 +19,91 @@ public sealed class TmdbMetadataProvider(
     public string Name => "tmdb";
 
     public bool Supports(MediaKind kind) => kind == MediaKind.Video;
+
+    // ── ICatalogProvider ─────────────────────────────────────────────────────
+
+    public bool SupportsCatalog(MediaKind kind, string catalogType) =>
+        !string.IsNullOrWhiteSpace(_opts.TmdbApiKey)
+        && kind == MediaKind.Video
+        && catalogType is "movie" or "series";
+
+    public async Task<IReadOnlyList<MetadataSearchResult>> GetCatalogAsync(
+        MediaKind kind, string catalogType, string category, int skip, int take,
+        string? genre = null, CancellationToken ct = default)
+    {
+        if (!SupportsCatalog(kind, catalogType)) return [];
+
+        var mediaType = catalogType == "series" ? "tv" : "movie";
+        var page = Math.Max(1, skip / Math.Max(take, 1) + 1);
+
+        string url;
+        if (!string.IsNullOrWhiteSpace(genre))
+        {
+            var genreMap = mediaType == "tv" ? TvGenreIds : MovieGenreIds;
+            var genreId = genreMap.TryGetValue(genre.Trim(), out var id) ? id : 0;
+            if (genreId == 0)
+            {
+                // Try case-insensitive partial match
+                var match = genreMap.FirstOrDefault(kv => kv.Key.Contains(genre.Trim(), StringComparison.OrdinalIgnoreCase));
+                genreId = match.Value;
+            }
+            if (genreId > 0)
+                url = $"discover/{mediaType}?api_key={_opts.TmdbApiKey}&language=en-US&with_genres={genreId}&sort_by=popularity.desc&page={page}";
+            else
+                url = $"discover/{mediaType}?api_key={_opts.TmdbApiKey}&language=en-US&with_keywords={Uri.EscapeDataString(genre)}&sort_by=popularity.desc&page={page}";
+        }
+        else
+        {
+            url = category?.ToLowerInvariant() switch
+            {
+                "trending" => $"trending/{mediaType}/week?api_key={_opts.TmdbApiKey}&language=en-US&page={page}",
+                "rating" or "top" => $"{mediaType}/top_rated?api_key={_opts.TmdbApiKey}&language=en-US&page={page}",
+                _ => $"{mediaType}/popular?api_key={_opts.TmdbApiKey}&language=en-US&page={page}",
+            };
+        }
+
+        try
+        {
+            // Fetch two consecutive pages in parallel for double the results.
+            var url2 = url.Replace($"&page={page}", $"&page={page + 1}");
+            var task1 = GetJsonCachedAsync(url, ct);
+            var task2 = GetJsonCachedAsync(url2, ct);
+            await Task.WhenAll(task1, task2);
+
+            var results = new List<TmdbResult>();
+            foreach (var json in new[] { task1.Result, task2.Result })
+            {
+                if (json is null) continue;
+                var response = JsonSerializer.Deserialize<TmdbPagedResponse>(json);
+                if (response?.Results is not null) results.AddRange(response.Results);
+            }
+
+            var mediaKind = mediaType == "tv" ? "tv" : "movie";
+            return results.DistinctBy(r => r.Id).Select(r => MapResult(r, mediaKind)).ToList();
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "TMDb catalog fetch failed ({Type}/{Category})", mediaType, category);
+            return [];
+        }
+    }
+
+    private static readonly Dictionary<string, int> MovieGenreIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["action"] = 28, ["adventure"] = 12, ["animation"] = 16, ["comedy"] = 35,
+        ["crime"] = 80, ["documentary"] = 99, ["drama"] = 18, ["family"] = 10751,
+        ["fantasy"] = 14, ["history"] = 36, ["horror"] = 27, ["music"] = 10402,
+        ["mystery"] = 9648, ["romance"] = 10749, ["sci-fi"] = 878, ["science fiction"] = 878,
+        ["thriller"] = 53, ["war"] = 10752, ["western"] = 37,
+    };
+
+    private static readonly Dictionary<string, int> TvGenreIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["action"] = 10759, ["adventure"] = 10759, ["animation"] = 16, ["comedy"] = 35,
+        ["crime"] = 80, ["documentary"] = 99, ["drama"] = 18, ["family"] = 10751,
+        ["kids"] = 10762, ["mystery"] = 9648, ["reality"] = 10764, ["sci-fi"] = 10765,
+        ["science fiction"] = 10765, ["soap"] = 10766, ["western"] = 37,
+    };
 
     public async Task<IReadOnlyList<MetadataSearchResult>> SearchAsync(string query, MediaKind kind, int? year, CancellationToken ct = default)
     {
@@ -30,16 +114,27 @@ public sealed class TmdbMetadataProvider(
         }
         if (!Supports(kind)) return [];
 
-        var url = $"search/multi?api_key={_opts.TmdbApiKey}&query={Uri.EscapeDataString(query)}&include_adult=false&language=en-US";
-        if (year.HasValue) url += $"&year={year}";
+        // Fetch two pages and merge for better search coverage (TMDb returns 20/page).
+        var baseUrl = $"search/multi?api_key={_opts.TmdbApiKey}&query={Uri.EscapeDataString(query)}&include_adult=true&language=en-US";
+        if (year.HasValue) baseUrl += $"&year={year}";
 
         try
         {
-            var json = await GetJsonCachedAsync(url, ct);
-            if (json is null) return [];
-            var response = JsonSerializer.Deserialize<TmdbSearchResponse>(json);
-            if (response?.Results is null) return [];
-            return response.Results
+            var page1Task = GetJsonCachedAsync($"{baseUrl}&page=1", ct);
+            var page2Task = GetJsonCachedAsync($"{baseUrl}&page=2", ct);
+            await Task.WhenAll(page1Task, page2Task);
+
+            var results = new List<TmdbResult>();
+            foreach (var json in new[] { page1Task.Result, page2Task.Result })
+            {
+                if (json is null) continue;
+                var response = JsonSerializer.Deserialize<TmdbSearchResponse>(json);
+                if (response?.Results is not null)
+                    results.AddRange(response.Results);
+            }
+
+            return results
+                .DistinctBy(r => r.Id)
                 .Where(r => r.MediaType is "movie" or "tv")
                 .Select(MapResult)
                 .ToList();
@@ -61,7 +156,7 @@ public sealed class TmdbMetadataProvider(
         if (parts.Length != 2) return null;
         var (type, id) = (parts[0], parts[1]);
 
-        var url = $"{type}/{id}?api_key={_opts.TmdbApiKey}&language=en-US&append_to_response=external_ids";
+        var url = $"{type}/{id}?api_key={_opts.TmdbApiKey}&language=en-US&append_to_response=external_ids,credits";
         try
         {
             var jsonStr = await GetJsonCachedAsync(url, ct);
@@ -87,17 +182,22 @@ public sealed class TmdbMetadataProvider(
         return json;
     }
 
-    private MetadataSearchResult MapResult(TmdbResult r)
+    private MetadataSearchResult MapResult(TmdbResult r) =>
+        MapResult(r, r.MediaType ?? "movie");
+
+    private MetadataSearchResult MapResult(TmdbResult r, string type)
     {
         var title = r.Title ?? r.Name ?? "Untitled";
         var release = r.ReleaseDate ?? r.FirstAirDate;
         DateOnly? releaseDate = !string.IsNullOrEmpty(release) && DateOnly.TryParse(release, out var d) ? d : null;
         var providerIds = new Dictionary<string, string>
         {
-            ["tmdb"] = $"{r.MediaType}:{r.Id}",
+            ["tmdb"] = $"{type}:{r.Id}",
         };
+        if (!string.IsNullOrEmpty(r.MediaType))
+            providerIds["tmdb"] = $"{r.MediaType}:{r.Id}";
         return new MetadataSearchResult(
-            ProviderId: $"{r.MediaType}:{r.Id}",
+            ProviderId: $"{type}:{r.Id}",
             Title: title,
             OriginalTitle: r.OriginalTitle ?? r.OriginalName,
             Overview: r.Overview,
@@ -134,6 +234,36 @@ public sealed class TmdbMetadataProvider(
             if (!string.IsNullOrEmpty(imdbId)) providerIds["imdb"] = imdbId;
         }
 
+        var cast = new List<MetadataCastMember>();
+        if (json.TryGetProperty("credits", out var credits))
+        {
+            if (credits.TryGetProperty("cast", out var castArr))
+            {
+                var order = 0;
+                foreach (var actor in castArr.EnumerateArray().Take(15))
+                {
+                    var aName = actor.TryGetProperty("name", out var an) ? an.GetString() : null;
+                    if (string.IsNullOrEmpty(aName)) continue;
+                    var character = actor.TryGetProperty("character", out var ch) ? ch.GetString() : null;
+                    var tmdbPid = actor.TryGetProperty("id", out var aid) ? aid.GetInt32().ToString() : null;
+                    cast.Add(new MetadataCastMember(aName, PersonRole.Actor, character, order++, tmdbPid));
+                }
+            }
+            if (credits.TryGetProperty("crew", out var crewArr))
+            {
+                foreach (var member in crewArr.EnumerateArray())
+                {
+                    var job = member.TryGetProperty("job", out var j) ? j.GetString() : null;
+                    if (job is not ("Director" or "Screenplay" or "Writer")) continue;
+                    var cName = member.TryGetProperty("name", out var cn) ? cn.GetString() : null;
+                    if (string.IsNullOrEmpty(cName)) continue;
+                    var tmdbPid = member.TryGetProperty("id", out var mid) ? mid.GetInt32().ToString() : null;
+                    var role = job is "Director" ? PersonRole.Director : PersonRole.Writer;
+                    cast.Add(new MetadataCastMember(cName, role, null, 100 + cast.Count, tmdbPid));
+                }
+            }
+        }
+
         return new MetadataSearchResult(
             ProviderId: $"{type}:{id}",
             Title: title ?? "Untitled",
@@ -144,10 +274,12 @@ public sealed class TmdbMetadataProvider(
             BackdropUrl: !string.IsNullOrEmpty(backdrop) ? $"{_opts.TmdbImageBaseUrl}{backdrop}" : null,
             Rating: rating,
             Genres: genres,
-            ProviderIds: providerIds);
+            ProviderIds: providerIds,
+            Cast: cast.Count > 0 ? cast : null);
     }
 
     private sealed class TmdbSearchResponse { public List<TmdbResult>? Results { get; set; } }
+    private sealed class TmdbPagedResponse { public List<TmdbResult>? Results { get; set; } public int TotalPages { get; set; } }
     private sealed class TmdbResult
     {
         public int Id { get; set; }

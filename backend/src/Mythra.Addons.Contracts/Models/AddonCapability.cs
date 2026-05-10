@@ -8,6 +8,7 @@ public enum AddonCapability
 {
     MetadataProvider,
     StreamSource,
+    BookSource,
     SubtitleProvider,
     ScrobblingService,
     Notification,
